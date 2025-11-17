@@ -152,6 +152,46 @@ class Merchant extends Model
     }
 
     /**
+     * Get the merchant's payments
+     */
+    public function payments(): HasMany
+    {
+        return $this->hasMany(Payment::class);
+    }
+
+    /**
+     * Get the merchant's commissions
+     */
+    public function commissions(): HasMany
+    {
+        return $this->hasMany(Commission::class);
+    }
+
+    /**
+     * Get the merchant's payouts
+     */
+    public function payouts(): HasMany
+    {
+        return $this->hasMany(MerchantPayout::class);
+    }
+
+    /**
+     * Get the merchant's boosts
+     */
+    public function boosts(): HasMany
+    {
+        return $this->hasMany(Boost::class);
+    }
+
+    /**
+     * Get the merchant's campaigns
+     */
+    public function campaigns(): HasMany
+    {
+        return $this->hasMany(Campaign::class);
+    }
+
+    /**
      * Get the merchant's proximity alerts
      */
     public function proximityAlerts(): HasMany

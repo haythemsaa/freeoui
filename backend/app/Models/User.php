@@ -212,6 +212,30 @@ class User extends Model
     }
 
     /**
+     * Get the user's wallet
+     */
+    public function wallet(): HasOne
+    {
+        return $this->hasOne(Wallet::class);
+    }
+
+    /**
+     * Get the user's wallet transactions
+     */
+    public function walletTransactions(): HasMany
+    {
+        return $this->hasMany(WalletTransaction::class);
+    }
+
+    /**
+     * Get the user's payments
+     */
+    public function payments(): HasMany
+    {
+        return $this->hasMany(Payment::class);
+    }
+
+    /**
      * Get the user's governorate
      */
     public function governorate(): BelongsTo
