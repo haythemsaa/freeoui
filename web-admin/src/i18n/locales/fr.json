@@ -1,0 +1,239 @@
+{
+  "common": {
+    "welcome": "Bienvenue",
+    "loading": "Chargement...",
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "delete": "Supprimer",
+    "edit": "Modifier",
+    "create": "Créer",
+    "search": "Rechercher",
+    "filter": "Filtrer",
+    "export": "Exporter",
+    "refresh": "Actualiser",
+    "close": "Fermer",
+    "confirm": "Confirmer",
+    "yes": "Oui",
+    "no": "Non",
+    "actions": "Actions",
+    "status": "Statut",
+    "active": "Actif",
+    "inactive": "Inactif",
+    "from": "De",
+    "to": "À",
+    "date": "Date",
+    "time": "Heure"
+  },
+
+  "auth": {
+    "login": "Connexion",
+    "logout": "Déconnexion",
+    "email": "Email",
+    "password": "Mot de passe",
+    "remember_me": "Se souvenir de moi",
+    "forgot_password": "Mot de passe oublié ?",
+    "login_success": "Connexion réussie",
+    "login_error": "Identifiants invalides",
+    "logout_success": "Déconnexion réussie"
+  },
+
+  "navigation": {
+    "dashboard": "Tableau de bord",
+    "advantages": "Avantages",
+    "qr_codes": "QR Codes",
+    "transactions": "Transactions",
+    "analytics": "Analytiques",
+    "categories": "Catégories",
+    "settings": "Paramètres",
+    "profile": "Profil"
+  },
+
+  "dashboard": {
+    "title": "Tableau de bord",
+    "today_scans": "Scans aujourd'hui",
+    "active_users": "Utilisateurs actifs",
+    "total_savings": "Économies générées",
+    "conversion_rate": "Taux de conversion",
+    "this_month": "Ce mois",
+    "peak_hour": "Heure de pointe",
+    "most_popular": "Le plus populaire",
+    "scans_over_time": "Scans sur 7 jours",
+    "top_advantages": "Top 5 avantages",
+    "hourly_distribution": "Distribution horaire",
+    "category_breakdown": "Répartition par catégorie"
+  },
+
+  "advantages": {
+    "title": "Gestion des avantages",
+    "create": "Nouvel avantage",
+    "edit": "Modifier l'avantage",
+    "delete_confirm": "Êtes-vous sûr de vouloir supprimer cet avantage ?",
+    "delete_success": "Avantage supprimé avec succès",
+    "create_success": "Avantage créé avec succès",
+    "update_success": "Avantage mis à jour avec succès",
+    "fields": {
+      "title": "Titre",
+      "description": "Description",
+      "type": "Type de réduction",
+      "discount_percentage": "Pourcentage de réduction",
+      "discount_amount": "Montant de réduction",
+      "start_date": "Date de début",
+      "end_date": "Date de fin",
+      "days_available": "Jours disponibles",
+      "category": "Catégorie",
+      "status": "Statut"
+    },
+    "types": {
+      "percentage": "Pourcentage",
+      "fixed_amount": "Montant fixe",
+      "2for1": "2 pour 1",
+      "free_item": "Article gratuit"
+    }
+  },
+
+  "qr_codes": {
+    "title": "QR Codes",
+    "scan": "Scanner un QR Code",
+    "validate": "Valider",
+    "history": "Historique",
+    "status": {
+      "active": "Actif",
+      "used": "Utilisé",
+      "expired": "Expiré",
+      "cancelled": "Annulé"
+    },
+    "validate_success": "QR Code validé avec succès",
+    "validate_error": "QR Code invalide ou expiré",
+    "already_used": "Ce QR Code a déjà été utilisé",
+    "expired": "Ce QR Code a expiré"
+  },
+
+  "transactions": {
+    "title": "Transactions",
+    "export": "Exporter les transactions",
+    "total_transactions": "Total des transactions",
+    "total_discounts": "Réductions totales",
+    "average_transaction": "Transaction moyenne",
+    "fields": {
+      "id": "ID",
+      "customer": "Client",
+      "advantage": "Avantage",
+      "original_amount": "Montant original",
+      "discounted_amount": "Montant réduit",
+      "savings": "Économies",
+      "date": "Date"
+    }
+  },
+
+  "analytics": {
+    "title": "Analytiques",
+    "overview": "Vue d'ensemble",
+    "detailed_report": "Rapport détaillé",
+    "conversion_funnel": "Entonnoir de conversion",
+    "customer_insights": "Aperçu clients",
+    "generate_report": "Générer un rapport",
+    "select_period": "Sélectionner une période",
+    "metrics": {
+      "total_scans": "Total des scans",
+      "unique_customers": "Clients uniques",
+      "returning_customers": "Clients récurrents",
+      "average_per_customer": "Moyenne par client",
+      "generated": "Générés",
+      "used": "Utilisés"
+    }
+  },
+
+  "categories": {
+    "title": "Catégories",
+    "create": "Nouvelle catégorie",
+    "edit": "Modifier la catégorie",
+    "delete_confirm": "Êtes-vous sûr de vouloir supprimer cette catégorie ?",
+    "fields": {
+      "name": "Nom (Français)",
+      "name_ar": "Nom (Arabe)",
+      "icon": "Icône",
+      "color": "Couleur"
+    },
+    "advantages_count": "avantages"
+  },
+
+  "settings": {
+    "title": "Paramètres",
+    "profile": "Profil",
+    "security": "Sécurité",
+    "notifications": "Notifications",
+    "subscription": "Abonnement",
+    "update_success": "Paramètres mis à jour avec succès",
+    "profile_fields": {
+      "business_name": "Nom de l'entreprise",
+      "email": "Email",
+      "phone": "Téléphone",
+      "address": "Adresse",
+      "city": "Ville",
+      "logo": "Logo"
+    },
+    "password_fields": {
+      "current_password": "Mot de passe actuel",
+      "new_password": "Nouveau mot de passe",
+      "confirm_password": "Confirmer le mot de passe"
+    },
+    "notification_preferences": {
+      "email_notifications": "Notifications par email",
+      "push_notifications": "Notifications push",
+      "daily_reports": "Rapports quotidiens",
+      "weekly_summary": "Résumé hebdomadaire"
+    }
+  },
+
+  "validation": {
+    "required": "Ce champ est requis",
+    "email": "Email invalide",
+    "min": "Doit contenir au moins {{min}} caractères",
+    "max": "Ne peut pas dépasser {{max}} caractères",
+    "number": "Doit être un nombre",
+    "positive": "Doit être un nombre positif",
+    "between": "Doit être entre {{min}} et {{max}}"
+  },
+
+  "errors": {
+    "generic": "Une erreur est survenue",
+    "network": "Erreur de connexion réseau",
+    "unauthorized": "Non autorisé",
+    "forbidden": "Accès interdit",
+    "not_found": "Ressource introuvable",
+    "server_error": "Erreur serveur",
+    "try_again": "Veuillez réessayer"
+  },
+
+  "success": {
+    "saved": "Enregistré avec succès",
+    "updated": "Mis à jour avec succès",
+    "deleted": "Supprimé avec succès",
+    "created": "Créé avec succès"
+  },
+
+  "days": {
+    "sunday": "Dimanche",
+    "monday": "Lundi",
+    "tuesday": "Mardi",
+    "wednesday": "Mercredi",
+    "thursday": "Jeudi",
+    "friday": "Vendredi",
+    "saturday": "Samedi"
+  },
+
+  "months": {
+    "january": "Janvier",
+    "february": "Février",
+    "march": "Mars",
+    "april": "Avril",
+    "may": "Mai",
+    "june": "Juin",
+    "july": "Juillet",
+    "august": "Août",
+    "september": "Septembre",
+    "october": "Octobre",
+    "november": "Novembre",
+    "december": "Décembre"
+  }
+}

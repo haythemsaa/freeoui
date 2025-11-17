@@ -1,0 +1,112 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [ main ]
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  deploy-backend:
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.8.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add server to known hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy backend
+        env:
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+        run: |
+          ssh $SERVER_USER@$SERVER_HOST << 'ENDSSH'
+            cd /var/www/freeoui/backend
+            git pull origin main
+            composer install --no-dev --optimize-autoloader
+            php artisan migrate --force
+            php artisan config:cache
+            php artisan route:cache
+            php artisan view:cache
+            sudo supervisorctl restart freeoui-worker:*
+            sudo systemctl reload php8.3-fpm
+          ENDSSH
+
+      - name: Notify deployment success
+        if: success()
+        run: echo "Backend deployed successfully!"
+
+  deploy-web-admin:
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        working-directory: ./web-admin
+        run: npm ci
+
+      - name: Build application
+        working-directory: ./web-admin
+        env:
+          VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
+        run: npm run build
+
+      - name: Deploy to server
+        uses: easingthemes/ssh-deploy@v4
+        with:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SOURCE: "web-admin/dist/"
+          REMOTE_HOST: ${{ secrets.SERVER_HOST }}
+          REMOTE_USER: ${{ secrets.SERVER_USER }}
+          TARGET: "/var/www/freeoui/web-admin/dist"
+
+      - name: Notify deployment success
+        if: success()
+        run: echo "Web admin deployed successfully!"
+
+  health-check:
+    runs-on: ubuntu-latest
+    needs: [deploy-backend, deploy-web-admin]
+
+    steps:
+      - name: Wait for deployment
+        run: sleep 30
+
+      - name: Check backend health
+        run: |
+          response=$(curl -s -o /dev/null -w "%{http_code}" ${{ secrets.API_URL }}/health)
+          if [ $response -eq 200 ]; then
+            echo "Backend health check passed"
+          else
+            echo "Backend health check failed with status $response"
+            exit 1
+          fi
+
+      - name: Check web admin
+        run: |
+          response=$(curl -s -o /dev/null -w "%{http_code}" ${{ secrets.WEB_ADMIN_URL }})
+          if [ $response -eq 200 ]; then
+            echo "Web admin health check passed"
+          else
+            echo "Web admin health check failed with status $response"
+            exit 1
+          fi

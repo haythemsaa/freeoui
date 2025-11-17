@@ -1,0 +1,239 @@
+{
+  "common": {
+    "welcome": "مرحبا",
+    "loading": "جاري التحميل...",
+    "save": "حفظ",
+    "cancel": "إلغاء",
+    "delete": "حذف",
+    "edit": "تعديل",
+    "create": "إنشاء",
+    "search": "بحث",
+    "filter": "تصفية",
+    "export": "تصدير",
+    "refresh": "تحديث",
+    "close": "إغلاق",
+    "confirm": "تأكيد",
+    "yes": "نعم",
+    "no": "لا",
+    "actions": "إجراءات",
+    "status": "الحالة",
+    "active": "نشط",
+    "inactive": "غير نشط",
+    "from": "من",
+    "to": "إلى",
+    "date": "التاريخ",
+    "time": "الوقت"
+  },
+
+  "auth": {
+    "login": "تسجيل الدخول",
+    "logout": "تسجيل الخروج",
+    "email": "البريد الإلكتروني",
+    "password": "كلمة المرور",
+    "remember_me": "تذكرني",
+    "forgot_password": "نسيت كلمة المرور؟",
+    "login_success": "تم تسجيل الدخول بنجاح",
+    "login_error": "بيانات الاعتماد غير صحيحة",
+    "logout_success": "تم تسجيل الخروج بنجاح"
+  },
+
+  "navigation": {
+    "dashboard": "لوحة التحكم",
+    "advantages": "المزايا",
+    "qr_codes": "رموز QR",
+    "transactions": "المعاملات",
+    "analytics": "التحليلات",
+    "categories": "الفئات",
+    "settings": "الإعدادات",
+    "profile": "الملف الشخصي"
+  },
+
+  "dashboard": {
+    "title": "لوحة التحكم",
+    "today_scans": "المسح اليوم",
+    "active_users": "المستخدمون النشطون",
+    "total_savings": "الوفورات المحققة",
+    "conversion_rate": "معدل التحويل",
+    "this_month": "هذا الشهر",
+    "peak_hour": "ساعة الذروة",
+    "most_popular": "الأكثر شعبية",
+    "scans_over_time": "المسح على مدى 7 أيام",
+    "top_advantages": "أفضل 5 مزايا",
+    "hourly_distribution": "التوزيع بالساعة",
+    "category_breakdown": "التوزيع حسب الفئة"
+  },
+
+  "advantages": {
+    "title": "إدارة المزايا",
+    "create": "ميزة جديدة",
+    "edit": "تعديل الميزة",
+    "delete_confirm": "هل أنت متأكد من حذف هذه الميزة؟",
+    "delete_success": "تم حذف الميزة بنجاح",
+    "create_success": "تم إنشاء الميزة بنجاح",
+    "update_success": "تم تحديث الميزة بنجاح",
+    "fields": {
+      "title": "العنوان",
+      "description": "الوصف",
+      "type": "نوع التخفيض",
+      "discount_percentage": "نسبة التخفيض",
+      "discount_amount": "مبلغ التخفيض",
+      "start_date": "تاريخ البدء",
+      "end_date": "تاريخ الانتهاء",
+      "days_available": "الأيام المتاحة",
+      "category": "الفئة",
+      "status": "الحالة"
+    },
+    "types": {
+      "percentage": "نسبة مئوية",
+      "fixed_amount": "مبلغ ثابت",
+      "2for1": "2 مقابل 1",
+      "free_item": "عنصر مجاني"
+    }
+  },
+
+  "qr_codes": {
+    "title": "رموز QR",
+    "scan": "مسح رمز QR",
+    "validate": "تحقق",
+    "history": "السجل",
+    "status": {
+      "active": "نشط",
+      "used": "مستخدم",
+      "expired": "منتهي الصلاحية",
+      "cancelled": "ملغى"
+    },
+    "validate_success": "تم التحقق من رمز QR بنجاح",
+    "validate_error": "رمز QR غير صالح أو منتهي الصلاحية",
+    "already_used": "تم استخدام رمز QR هذا بالفعل",
+    "expired": "انتهت صلاحية رمز QR هذا"
+  },
+
+  "transactions": {
+    "title": "المعاملات",
+    "export": "تصدير المعاملات",
+    "total_transactions": "إجمالي المعاملات",
+    "total_discounts": "إجمالي التخفيضات",
+    "average_transaction": "متوسط المعاملة",
+    "fields": {
+      "id": "المعرف",
+      "customer": "العميل",
+      "advantage": "الميزة",
+      "original_amount": "المبلغ الأصلي",
+      "discounted_amount": "المبلغ المخفض",
+      "savings": "الوفورات",
+      "date": "التاريخ"
+    }
+  },
+
+  "analytics": {
+    "title": "التحليلات",
+    "overview": "نظرة عامة",
+    "detailed_report": "تقرير مفصل",
+    "conversion_funnel": "قمع التحويل",
+    "customer_insights": "رؤى العملاء",
+    "generate_report": "إنشاء تقرير",
+    "select_period": "اختر الفترة",
+    "metrics": {
+      "total_scans": "إجمالي عمليات المسح",
+      "unique_customers": "عملاء فريدون",
+      "returning_customers": "عملاء عائدون",
+      "average_per_customer": "المتوسط لكل عميل",
+      "generated": "تم إنشاؤها",
+      "used": "مستخدمة"
+    }
+  },
+
+  "categories": {
+    "title": "الفئات",
+    "create": "فئة جديدة",
+    "edit": "تعديل الفئة",
+    "delete_confirm": "هل أنت متأكد من حذف هذه الفئة؟",
+    "fields": {
+      "name": "الاسم (فرنسي)",
+      "name_ar": "الاسم (عربي)",
+      "icon": "الأيقونة",
+      "color": "اللون"
+    },
+    "advantages_count": "مزايا"
+  },
+
+  "settings": {
+    "title": "الإعدادات",
+    "profile": "الملف الشخصي",
+    "security": "الأمان",
+    "notifications": "الإشعارات",
+    "subscription": "الاشتراك",
+    "update_success": "تم تحديث الإعدادات بنجاح",
+    "profile_fields": {
+      "business_name": "اسم النشاط التجاري",
+      "email": "البريد الإلكتروني",
+      "phone": "الهاتف",
+      "address": "العنوان",
+      "city": "المدينة",
+      "logo": "الشعار"
+    },
+    "password_fields": {
+      "current_password": "كلمة المرور الحالية",
+      "new_password": "كلمة المرور الجديدة",
+      "confirm_password": "تأكيد كلمة المرور"
+    },
+    "notification_preferences": {
+      "email_notifications": "إشعارات البريد الإلكتروني",
+      "push_notifications": "الإشعارات الفورية",
+      "daily_reports": "التقارير اليومية",
+      "weekly_summary": "الملخص الأسبوعي"
+    }
+  },
+
+  "validation": {
+    "required": "هذا الحقل مطلوب",
+    "email": "بريد إلكتروني غير صالح",
+    "min": "يجب أن يحتوي على {{min}} أحرف على الأقل",
+    "max": "لا يمكن أن يتجاوز {{max}} أحرف",
+    "number": "يجب أن يكون رقمًا",
+    "positive": "يجب أن يكون رقمًا موجبًا",
+    "between": "يجب أن يكون بين {{min}} و {{max}}"
+  },
+
+  "errors": {
+    "generic": "حدث خطأ",
+    "network": "خطأ في اتصال الشبكة",
+    "unauthorized": "غير مصرح",
+    "forbidden": "ممنوع الدخول",
+    "not_found": "المورد غير موجود",
+    "server_error": "خطأ في الخادم",
+    "try_again": "يرجى المحاولة مرة أخرى"
+  },
+
+  "success": {
+    "saved": "تم الحفظ بنجاح",
+    "updated": "تم التحديث بنجاح",
+    "deleted": "تم الحذف بنجاح",
+    "created": "تم الإنشاء بنجاح"
+  },
+
+  "days": {
+    "sunday": "الأحد",
+    "monday": "الاثنين",
+    "tuesday": "الثلاثاء",
+    "wednesday": "الأربعاء",
+    "thursday": "الخميس",
+    "friday": "الجمعة",
+    "saturday": "السبت"
+  },
+
+  "months": {
+    "january": "يناير",
+    "february": "فبراير",
+    "march": "مارس",
+    "april": "أبريل",
+    "may": "مايو",
+    "june": "يونيو",
+    "july": "يوليو",
+    "august": "أغسطس",
+    "september": "سبتمبر",
+    "october": "أكتوبر",
+    "november": "نوفمبر",
+    "december": "ديسمبر"
+  }
+}
