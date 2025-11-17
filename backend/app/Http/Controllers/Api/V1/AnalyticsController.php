@@ -2,345 +2,157 @@
 
 namespace App\Http\Controllers\Api\V1;
 
-use App\Helpers\ResponseHelper;
 use App\Http\Controllers\Controller;
-use App\Models\Advantage;
-use App\Models\QRCode;
-use Carbon\Carbon;
+use App\Services\AnalyticsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
 
 class AnalyticsController extends Controller
 {
+    public function __construct(
+        private AnalyticsService $analyticsService
+    ) {}
+
     /**
-     * Get dashboard statistics
+     * Get dashboard analytics (for merchants)
      */
     public function dashboard(Request $request): JsonResponse
     {
-        $merchant = $request->user();
+        $user = $request->user();
+        $merchant = $user->merchant;
 
-        $cacheKey = "analytics:dashboard:{$merchant->id}";
+        if (!$merchant) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Merchant not found',
+            ], 404);
+        }
 
-        $data = Cache::remember($cacheKey, 300, function () use ($merchant) {
-            $now = Carbon::now();
-            $today = $now->copy()->startOfDay();
-            $yesterday = $now->copy()->subDay()->startOfDay();
-            $lastWeek = $now->copy()->subWeek();
-            $lastMonth = $now->copy()->subMonth();
+        $dateRange = $request->input('range', '7d'); // 7d, 30d, 90d
+        $startDate = match($dateRange) {
+            '7d' => Carbon::now()->subDays(7),
+            '30d' => Carbon::now()->subDays(30),
+            '90d' => Carbon::now()->subDays(90),
+            default => Carbon::now()->subDays(7),
+        };
 
-            // Today's scans
-            $todayScans = $this->getScansCount($merchant->id, $today, $now);
-
-            // Yesterday's scans
-            $yesterdayScans = $this->getScansCount(
-                $merchant->id,
-                $yesterday,
-                $yesterday->copy()->endOfDay()
-            );
-
-            // This week scans
-            $weekScans = $this->getScansCount($merchant->id, $lastWeek, $now);
-
-            // This month scans
-            $monthScans = $this->getScansCount($merchant->id, $lastMonth, $now);
-
-            // Daily scans for last 7 days
-            $dailyScans = $this->getDailyScans($merchant->id, 7);
-
-            // Top advantages
-            $topAdvantages = $this->getTopAdvantages($merchant->id, 5);
-
-            // Hourly distribution
-            $hourlyDistribution = $this->getHourlyDistribution($merchant->id);
-
-            // Category breakdown
-            $categoryBreakdown = $this->getCategoryBreakdown($merchant->id);
-
-            return [
-                'today_scans' => $todayScans,
-                'yesterday_scans' => $yesterdayScans,
-                'week_scans' => $weekScans,
-                'month_scans' => $monthScans,
-                'scans_change' => $yesterdayScans > 0
-                    ? round((($todayScans - $yesterdayScans) / $yesterdayScans) * 100, 1)
-                    : 0,
-                'daily_scans' => $dailyScans,
-                'top_advantages' => $topAdvantages,
-                'hourly_distribution' => $hourlyDistribution,
-                'category_breakdown' => $categoryBreakdown,
-            ];
-        });
-
-        return ResponseHelper::success($data);
-    }
-
-    /**
-     * Get real-time statistics
-     */
-    public function realtime(Request $request): JsonResponse
-    {
-        $merchant = $request->user();
-
-        $now = Carbon::now();
-        $today = $now->copy()->startOfDay();
-
-        $data = [
-            'today_scans' => $this->getScansCount($merchant->id, $today, $now),
-            'active_users' => $this->getActiveUsersCount($merchant->id),
-            'current_hour_scans' => $this->getCurrentHourScans($merchant->id),
-            'timestamp' => $now->toIso8601String(),
+        $metrics = [
+            'total_views' => $merchant->advantages()->sum('views_count'),
+            'total_scans' => $merchant->advantages()->sum('scans_count'),
+            'total_revenue' => $merchant->payments()->where('status', 'completed')->sum('amount'),
+            'pending_commission' => $merchant->commissions()->where('status', 'pending')->sum('amount'),
+            'conversion_rate' => $this->analyticsService->getConversionRate($merchant, $startDate),
         ];
 
-        return ResponseHelper::success($data);
+        return response()->json([
+            'status' => 'success',
+            'data' => [
+                'metrics' => $metrics,
+                'date_range' => $dateRange,
+            ],
+        ]);
     }
 
     /**
-     * Get detailed analytics report
+     * Get user engagement analytics
      */
-    public function report(Request $request): JsonResponse
+    public function userEngagement(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $engagement = [
+            'total_favorites' => $user->favorites()->count(),
+            'total_scans' => $user->transactions()->count(),
+            'total_savings' => $user->total_savings_tnd,
+            'level' => $user->level,
+            'points' => $user->points_balance,
+            'streak_days' => $user->streak_days ?? 0,
+        ];
+
+        return response()->json([
+            'status' => 'success',
+            'data' => [
+                'engagement' => $engagement,
+            ],
+        ]);
+    }
+
+    /**
+     * Track custom event
+     */
+    public function trackEvent(Request $request): JsonResponse
     {
         $request->validate([
-            'start_date' => 'required|date',
-            'end_date' => 'required|date|after:start_date',
+            'event_name' => 'required|string',
+            'event_category' => 'required|string',
+            'properties' => 'nullable|array',
         ]);
 
-        $merchant = $request->user();
-        $startDate = Carbon::parse($request->start_date)->startOfDay();
-        $endDate = Carbon::parse($request->end_date)->endOfDay();
+        $user = $request->user();
 
-        $data = [
-            'period' => [
-                'start' => $startDate->toDateString(),
-                'end' => $endDate->toDateString(),
-            ],
-            'summary' => $this->getPeriodSummary($merchant->id, $startDate, $endDate),
-            'daily_breakdown' => $this->getDailyBreakdown($merchant->id, $startDate, $endDate),
-            'advantage_performance' => $this->getAdvantagePerformance($merchant->id, $startDate, $endDate),
-            'customer_insights' => $this->getCustomerInsights($merchant->id, $startDate, $endDate),
-        ];
+        $this->analyticsService->trackEvent(
+            $user,
+            $request->event_name,
+            $request->event_category,
+            $request->input('properties', [])
+        );
 
-        return ResponseHelper::success($data);
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Événement enregistré',
+        ]);
     }
 
     /**
-     * Get conversion funnel
+     * Get popular advantages (trending)
      */
-    public function funnel(Request $request): JsonResponse
+    public function trending(Request $request): JsonResponse
     {
-        $merchant = $request->user();
+        $governorateId = $request->input('governorate_id');
+        $categoryId = $request->input('category_id');
+        $limit = $request->input('limit', 10);
 
-        $days = $request->input('days', 30);
-        $startDate = Carbon::now()->subDays($days)->startOfDay();
-        $endDate = Carbon::now();
-
-        $advantageIds = Advantage::where('merchant_id', $merchant->id)
-            ->pluck('id');
-
-        // QR codes generated
-        $generated = QRCode::whereIn('advantage_id', $advantageIds)
-            ->whereBetween('generated_at', [$startDate, $endDate])
-            ->count();
-
-        // QR codes used
-        $used = QRCode::whereIn('advantage_id', $advantageIds)
-            ->where('status', 'used')
-            ->whereBetween('generated_at', [$startDate, $endDate])
-            ->count();
-
-        // QR codes expired
-        $expired = QRCode::whereIn('advantage_id', $advantageIds)
-            ->where('status', 'expired')
-            ->whereBetween('generated_at', [$startDate, $endDate])
-            ->count();
-
-        $data = [
-            'period_days' => $days,
-            'funnel' => [
-                [
-                    'stage' => 'Generated',
-                    'count' => $generated,
-                    'percentage' => 100,
-                ],
-                [
-                    'stage' => 'Used',
-                    'count' => $used,
-                    'percentage' => $generated > 0 ? round(($used / $generated) * 100, 1) : 0,
-                ],
-                [
-                    'stage' => 'Expired',
-                    'count' => $expired,
-                    'percentage' => $generated > 0 ? round(($expired / $generated) * 100, 1) : 0,
-                ],
-            ],
-            'conversion_rate' => $generated > 0 ? round(($used / $generated) * 100, 1) : 0,
-        ];
-
-        return ResponseHelper::success($data);
-    }
-
-    // Protected helper methods
-
-    protected function getScansCount(int $merchantId, Carbon $start, Carbon $end): int
-    {
-        return QRCode::whereHas('advantage', fn($q) => $q->where('merchant_id', $merchantId))
-            ->where('status', 'used')
-            ->whereBetween('validated_at', [$start, $end])
-            ->count();
-    }
-
-    protected function getDailyScans(int $merchantId, int $days): array
-    {
-        $startDate = Carbon::now()->subDays($days)->startOfDay();
-
-        return QRCode::whereHas('advantage', fn($q) => $q->where('merchant_id', $merchantId))
-            ->where('status', 'used')
-            ->where('validated_at', '>=', $startDate)
-            ->selectRaw('DATE(validated_at) as date, COUNT(*) as count')
-            ->groupBy('date')
-            ->orderBy('date')
-            ->get()
-            ->toArray();
-    }
-
-    protected function getTopAdvantages(int $merchantId, int $limit): array
-    {
-        return DB::table('qr_codes')
-            ->join('advantages', 'qr_codes.advantage_id', '=', 'advantages.id')
-            ->where('advantages.merchant_id', $merchantId)
-            ->where('qr_codes.status', 'used')
-            ->select('advantages.title', DB::raw('COUNT(*) as scans'))
-            ->groupBy('advantages.id', 'advantages.title')
-            ->orderByDesc('scans')
+        $advantages = \App\Models\Advantage::query()
+            ->with(['merchant', 'category'])
+            ->where('status', 'active')
+            ->when($governorateId, function ($query) use ($governorateId) {
+                $query->whereHas('merchant', function ($q) use ($governorateId) {
+                    $q->where('governorate_id', $governorateId);
+                });
+            })
+            ->when($categoryId, function ($query) use ($categoryId) {
+                $query->where('category_id', $categoryId);
+            })
+            ->orderByDesc('views_count')
+            ->orderByDesc('scans_count')
             ->limit($limit)
-            ->get()
-            ->toArray();
+            ->get();
+
+        return response()->json([
+            'status' => 'success',
+            'data' => [
+                'trending' => $advantages,
+            ],
+        ]);
     }
 
-    protected function getHourlyDistribution(int $merchantId): array
+    /**
+     * Get retention cohort analysis (admin only)
+     */
+    public function cohortAnalysis(Request $request): JsonResponse
     {
-        return QRCode::whereHas('advantage', fn($q) => $q->where('merchant_id', $merchantId))
-            ->where('status', 'used')
-            ->selectRaw('EXTRACT(HOUR FROM validated_at) as hour, COUNT(*) as count')
-            ->groupBy('hour')
-            ->orderBy('hour')
-            ->get()
-            ->toArray();
-    }
+        // This would typically require admin privileges
+        $startDate = Carbon::parse($request->input('start_date', Carbon::now()->subMonths(3)));
+        $weeks = $request->input('weeks', 12);
 
-    protected function getCategoryBreakdown(int $merchantId): array
-    {
-        return DB::table('qr_codes')
-            ->join('advantages', 'qr_codes.advantage_id', '=', 'advantages.id')
-            ->join('categories', 'advantages.category_id', '=', 'categories.id')
-            ->where('advantages.merchant_id', $merchantId)
-            ->where('qr_codes.status', 'used')
-            ->select('categories.name', DB::raw('COUNT(*) as count'))
-            ->groupBy('categories.id', 'categories.name')
-            ->get()
-            ->toArray();
-    }
+        $cohortData = $this->analyticsService->getRetentionCohort($startDate, $weeks);
 
-    protected function getActiveUsersCount(int $merchantId): int
-    {
-        $last24Hours = Carbon::now()->subDay();
-
-        return QRCode::whereHas('advantage', fn($q) => $q->where('merchant_id', $merchantId))
-            ->where('generated_at', '>=', $last24Hours)
-            ->distinct('user_id')
-            ->count('user_id');
-    }
-
-    protected function getCurrentHourScans(int $merchantId): int
-    {
-        $currentHour = Carbon::now()->startOfHour();
-
-        return QRCode::whereHas('advantage', fn($q) => $q->where('merchant_id', $merchantId))
-            ->where('status', 'used')
-            ->where('validated_at', '>=', $currentHour)
-            ->count();
-    }
-
-    protected function getPeriodSummary(int $merchantId, Carbon $start, Carbon $end): array
-    {
-        $qrCodes = QRCode::whereHas('advantage', fn($q) => $q->where('merchant_id', $merchantId))
-            ->where('status', 'used')
-            ->whereBetween('validated_at', [$start, $end]);
-
-        return [
-            'total_scans' => $qrCodes->count(),
-            'total_revenue' => $qrCodes->sum('discounted_amount'),
-            'total_savings' => $qrCodes->selectRaw('SUM(original_amount - discounted_amount) as savings')
-                ->value('savings') ?? 0,
-            'unique_customers' => $qrCodes->distinct('user_id')->count('user_id'),
-        ];
-    }
-
-    protected function getDailyBreakdown(int $merchantId, Carbon $start, Carbon $end): array
-    {
-        return QRCode::whereHas('advantage', fn($q) => $q->where('merchant_id', $merchantId))
-            ->where('status', 'used')
-            ->whereBetween('validated_at', [$start, $end])
-            ->selectRaw('
-                DATE(validated_at) as date,
-                COUNT(*) as scans,
-                SUM(discounted_amount) as revenue,
-                SUM(original_amount - discounted_amount) as savings
-            ')
-            ->groupBy('date')
-            ->orderBy('date')
-            ->get()
-            ->toArray();
-    }
-
-    protected function getAdvantagePerformance(int $merchantId, Carbon $start, Carbon $end): array
-    {
-        return DB::table('qr_codes')
-            ->join('advantages', 'qr_codes.advantage_id', '=', 'advantages.id')
-            ->where('advantages.merchant_id', $merchantId)
-            ->where('qr_codes.status', 'used')
-            ->whereBetween('qr_codes.validated_at', [$start, $end])
-            ->select(
-                'advantages.title',
-                DB::raw('COUNT(*) as scans'),
-                DB::raw('SUM(qr_codes.discounted_amount) as revenue'),
-                DB::raw('COUNT(DISTINCT qr_codes.user_id) as unique_customers')
-            )
-            ->groupBy('advantages.id', 'advantages.title')
-            ->orderByDesc('scans')
-            ->get()
-            ->toArray();
-    }
-
-    protected function getCustomerInsights(int $merchantId, Carbon $start, Carbon $end): array
-    {
-        $qrCodes = QRCode::whereHas('advantage', fn($q) => $q->where('merchant_id', $merchantId))
-            ->where('status', 'used')
-            ->whereBetween('validated_at', [$start, $end]);
-
-        $uniqueCustomers = $qrCodes->distinct('user_id')->count('user_id');
-        $totalScans = $qrCodes->count();
-
-        return [
-            'unique_customers' => $uniqueCustomers,
-            'total_scans' => $totalScans,
-            'average_scans_per_customer' => $uniqueCustomers > 0
-                ? round($totalScans / $uniqueCustomers, 2)
-                : 0,
-            'returning_customers' => $this->getReturningCustomers($merchantId, $start, $end),
-        ];
-    }
-
-    protected function getReturningCustomers(int $merchantId, Carbon $start, Carbon $end): int
-    {
-        return DB::table('qr_codes')
-            ->join('advantages', 'qr_codes.advantage_id', '=', 'advantages.id')
-            ->where('advantages.merchant_id', $merchantId)
-            ->where('qr_codes.status', 'used')
-            ->whereBetween('qr_codes.validated_at', [$start, $end])
-            ->groupBy('qr_codes.user_id')
-            ->havingRaw('COUNT(*) > 1')
-            ->count();
+        return response()->json([
+            'status' => 'success',
+            'data' => [
+                'cohort_analysis' => $cohortData,
+            ],
+        ]);
     }
 }

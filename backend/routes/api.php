@@ -1,9 +1,17 @@
 <?php
 
 use App\Http\Controllers\Api\V1\AdvantageController;
+use App\Http\Controllers\Api\V1\AnalyticsController;
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\BoostController;
+use App\Http\Controllers\Api\V1\ChatController;
+use App\Http\Controllers\Api\V1\NotificationController;
+use App\Http\Controllers\Api\V1\OfflineSyncController;
+use App\Http\Controllers\Api\V1\PaymentController;
 use App\Http\Controllers\Api\V1\ProximityController;
 use App\Http\Controllers\Api\V1\QRCodeController;
+use App\Http\Controllers\Api\V1\SocialController;
+use App\Http\Controllers\Api\V1\WalletController;
 use App\Http\Controllers\HealthController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -147,6 +155,87 @@ Route::prefix('v1')->group(function () {
                 'data' => ['stats' => $stats],
             ]);
         });
+
+        // ========== Phase 2: Monetization Routes ==========
+
+        // Wallet Routes
+        Route::prefix('wallet')->group(function () {
+            Route::get('/', [WalletController::class, 'index']);
+            Route::post('/top-up', [WalletController::class, 'topUp']);
+            Route::post('/withdraw', [WalletController::class, 'withdraw']);
+            Route::get('/transactions/{id}', [WalletController::class, 'transaction']);
+        });
+
+        // Payment Routes
+        Route::prefix('payments')->group(function () {
+            Route::get('/', [PaymentController::class, 'index']);
+            Route::get('/{paymentNumber}', [PaymentController::class, 'show']);
+            Route::post('/', [PaymentController::class, 'create']);
+            Route::get('/{paymentNumber}/verify', [PaymentController::class, 'verify']);
+        });
+
+        // Boost/Campaign Routes (Merchants)
+        Route::prefix('boosts')->group(function () {
+            Route::get('/', [BoostController::class, 'index']);
+            Route::get('/{id}', [BoostController::class, 'show']);
+            Route::post('/', [BoostController::class, 'store']);
+            Route::post('/{id}/pause', [BoostController::class, 'pause']);
+            Route::post('/{id}/resume', [BoostController::class, 'resume']);
+            Route::post('/{id}/impression', [BoostController::class, 'recordImpression']);
+            Route::post('/{id}/click', [BoostController::class, 'recordClick']);
+        });
+
+        // ========== Phase 3: User Experience Routes ==========
+
+        // Chat Routes
+        Route::prefix('chat')->group(function () {
+            Route::get('/conversations', [ChatController::class, 'conversations']);
+            Route::post('/conversations', [ChatController::class, 'startConversation']);
+            Route::get('/conversations/{conversationId}', [ChatController::class, 'messages']);
+            Route::post('/conversations/{conversationId}/messages', [ChatController::class, 'sendMessage']);
+            Route::post('/conversations/{conversationId}/read', [ChatController::class, 'markAsRead']);
+        });
+
+        // Notification Routes
+        Route::prefix('notifications')->group(function () {
+            Route::get('/', [NotificationController::class, 'index']);
+            Route::post('/{id}/read', [NotificationController::class, 'markAsRead']);
+            Route::post('/read-all', [NotificationController::class, 'markAllAsRead']);
+            Route::delete('/{id}', [NotificationController::class, 'destroy']);
+            Route::get('/settings', [NotificationController::class, 'settings']);
+            Route::put('/settings', [NotificationController::class, 'updateSettings']);
+        });
+
+        // Social/Sharing Routes
+        Route::prefix('social')->group(function () {
+            Route::post('/share', [SocialController::class, 'share']);
+            Route::post('/share/{shareId}/click', [SocialController::class, 'trackClick']);
+            Route::post('/share/{shareId}/conversion', [SocialController::class, 'trackConversion']);
+            Route::get('/shares', [SocialController::class, 'history']);
+            Route::get('/referrals', [SocialController::class, 'referralStats']);
+        });
+
+        // Analytics Routes
+        Route::prefix('analytics')->group(function () {
+            Route::get('/dashboard', [AnalyticsController::class, 'dashboard']);
+            Route::get('/engagement', [AnalyticsController::class, 'userEngagement']);
+            Route::post('/track', [AnalyticsController::class, 'trackEvent']);
+            Route::get('/trending', [AnalyticsController::class, 'trending']);
+        });
+
+        // Offline Sync Routes
+        Route::prefix('sync')->group(function () {
+            Route::post('/', [OfflineSyncController::class, 'sync']);
+            Route::post('/process', [OfflineSyncController::class, 'processQueue']);
+            Route::get('/status', [OfflineSyncController::class, 'queueStatus']);
+            Route::post('/retry', [OfflineSyncController::class, 'retryFailed']);
+            Route::post('/{queueId}/resolve', [OfflineSyncController::class, 'resolveConflict']);
+        });
+    });
+
+    // Payment Webhooks (Public - No Auth Required)
+    Route::prefix('webhooks')->group(function () {
+        Route::post('/payments/{provider}', [PaymentController::class, 'webhook']);
     });
 
     // Public Data Routes

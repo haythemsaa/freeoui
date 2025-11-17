@@ -3,18 +3,15 @@
 namespace App\Events;
 
 use App\Models\User;
-use App\Models\Advantage;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-class ProximityAlertTriggered
+class UserRegistered
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
     public function __construct(
-        public User $user,
-        public Advantage $advantage,
-        public float $distance
+        public User $user
     ) {}
 }
