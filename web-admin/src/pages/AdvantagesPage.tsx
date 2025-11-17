@@ -5,9 +5,13 @@ import { advantagesApi } from '../api/advantages'
 import type { Advantage } from '../types'
 import toast from 'react-hot-toast'
 import { formatDate } from '../lib/utils'
+import AdvantageFormModal from '../components/advantages/AdvantageFormModal'
+import Button from '../components/ui/Button'
 
 export default function AdvantagesPage() {
   const queryClient = useQueryClient()
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [selectedAdvantage, setSelectedAdvantage] = useState<Advantage | undefined>()
 
   const { data: advantages, isLoading } = useQuery({
     queryKey: ['advantages'],
@@ -46,6 +50,16 @@ export default function AdvantagesPage() {
     }
   }
 
+  const handleEdit = (advantage: Advantage) => {
+    setSelectedAdvantage(advantage)
+    setIsModalOpen(true)
+  }
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false)
+    setSelectedAdvantage(undefined)
+  }
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -61,10 +75,10 @@ export default function AdvantagesPage() {
           <h1 className="text-2xl font-bold text-gray-900">Mes Offres</h1>
           <p className="text-gray-600">Gérez vos avantages et promotions</p>
         </div>
-        <button className="bg-primary text-white px-4 py-2 rounded-lg hover:bg-orange-600 transition-colors flex items-center">
+        <Button onClick={() => setIsModalOpen(true)}>
           <Plus className="w-5 h-5 mr-2" />
           Nouvelle Offre
-        </button>
+        </Button>
       </div>
 
       <div className="bg-white rounded-lg shadow overflow-hidden">
@@ -151,7 +165,10 @@ export default function AdvantagesPage() {
                         <ToggleLeft className="w-5 h-5" />
                       )}
                     </button>
-                    <button className="text-primary hover:text-orange-700">
+                    <button
+                      onClick={() => handleEdit(advantage)}
+                      className="text-primary hover:text-orange-700"
+                    >
                       <Edit className="w-5 h-5" />
                     </button>
                     <button
@@ -167,6 +184,12 @@ export default function AdvantagesPage() {
           </table>
         </div>
       </div>
+
+      <AdvantageFormModal
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        advantage={selectedAdvantage}
+      />
     </div>
   )
 }
