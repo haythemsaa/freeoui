@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Advantage extends Model
@@ -52,6 +53,8 @@ class Advantage extends Model
         'conversion_rate',
         'average_rating',
         'reviews_count',
+        'rating_average',
+        'rating_count',
         'created_by',
     ];
 
@@ -82,6 +85,8 @@ class Advantage extends Model
         'conversion_rate' => 'decimal:2',
         'average_rating' => 'decimal:2',
         'reviews_count' => 'integer',
+        'rating_average' => 'decimal:2',
+        'rating_count' => 'integer',
     ];
 
     /**
@@ -141,11 +146,11 @@ class Advantage extends Model
     }
 
     /**
-     * Get the advantage's reviews
+     * Get the advantage's reviews (polymorphic)
      */
-    public function reviews(): HasMany
+    public function reviews(): MorphMany
     {
-        return $this->hasMany(Review::class);
+        return $this->morphMany(Review::class, 'reviewable');
     }
 
     /**

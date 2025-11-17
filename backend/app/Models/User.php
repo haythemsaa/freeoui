@@ -6,7 +6,9 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class User extends Model
@@ -42,6 +44,14 @@ class User extends Model
         'is_active',
         'is_verified',
         'last_login_at',
+        // Loyalty program fields
+        'loyalty_points_balance',
+        'loyalty_points_lifetime',
+        'loyalty_tier',
+        // Referral program fields
+        'referral_code',
+        'referred_by_id',
+        'successful_referrals',
     ];
 
     protected $hidden = [
@@ -117,6 +127,88 @@ class User extends Model
     public function reviews(): HasMany
     {
         return $this->hasMany(Review::class);
+    }
+
+    /**
+     * Get the user's loyalty points
+     */
+    public function loyaltyPoints(): HasMany
+    {
+        return $this->hasMany(LoyaltyPoint::class);
+    }
+
+    /**
+     * Get the user's loyalty redemptions
+     */
+    public function loyaltyRedemptions(): HasMany
+    {
+        return $this->hasMany(LoyaltyRedemption::class);
+    }
+
+    /**
+     * Get the user's bookings
+     */
+    public function bookings(): HasMany
+    {
+        return $this->hasMany(Booking::class);
+    }
+
+    /**
+     * Get referrals made by this user
+     */
+    public function referralsGiven(): HasMany
+    {
+        return $this->hasMany(Referral::class, 'referrer_id');
+    }
+
+    /**
+     * Get the referral received by this user
+     */
+    public function referralReceived(): HasOne
+    {
+        return $this->hasOne(Referral::class, 'referee_id');
+    }
+
+    /**
+     * Get the user who referred this user
+     */
+    public function referredBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'referred_by_id');
+    }
+
+    /**
+     * Get users referred by this user
+     */
+    public function referredUsers(): HasMany
+    {
+        return $this->hasMany(User::class, 'referred_by_id');
+    }
+
+    /**
+     * Get the user's achievements
+     */
+    public function achievements(): BelongsToMany
+    {
+        return $this->belongsToMany(Achievement::class, 'user_achievements')
+            ->withPivot('progress', 'unlocked_at')
+            ->withTimestamps();
+    }
+
+    /**
+     * Get the user's achievement progress
+     */
+    public function userAchievements(): HasMany
+    {
+        return $this->hasMany(UserAchievement::class);
+    }
+
+    /**
+     * Get the user's review helpfulness votes
+     */
+    public function reviewHelpfulness(): HasMany
+    {
+        return $this->hasMany(ReviewHelpfulness::class);
     }
 
     /**

@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Merchant extends Model
@@ -55,6 +56,15 @@ class Merchant extends Model
         'patente_url',
         'cin_url',
         'rib_url',
+        // Reviews
+        'rating_average',
+        'rating_count',
+        // Booking fields
+        'accepts_bookings',
+        'booking_advance_hours',
+        'booking_max_days',
+        'requires_confirmation',
+        'auto_confirm_bookings',
     ];
 
     protected $casts = [
@@ -73,6 +83,13 @@ class Merchant extends Model
         'total_transactions' => 'integer',
         'verified' => 'boolean',
         'featured' => 'boolean',
+        'rating_average' => 'decimal:2',
+        'rating_count' => 'integer',
+        'accepts_bookings' => 'boolean',
+        'booking_advance_hours' => 'integer',
+        'booking_max_days' => 'integer',
+        'requires_confirmation' => 'boolean',
+        'auto_confirm_bookings' => 'boolean',
     ];
 
     /**
@@ -103,11 +120,35 @@ class Merchant extends Model
     }
 
     /**
-     * Get the merchant's reviews
+     * Get the merchant's reviews (polymorphic)
      */
-    public function reviews(): HasMany
+    public function reviews(): MorphMany
     {
-        return $this->hasMany(Review::class);
+        return $this->morphMany(Review::class, 'reviewable');
+    }
+
+    /**
+     * Get the merchant's bookings
+     */
+    public function bookings(): HasMany
+    {
+        return $this->hasMany(Booking::class);
+    }
+
+    /**
+     * Get the merchant's booking slots
+     */
+    public function bookingSlots(): HasMany
+    {
+        return $this->hasMany(BookingSlot::class);
+    }
+
+    /**
+     * Get the merchant's booking blackouts
+     */
+    public function bookingBlackouts(): HasMany
+    {
+        return $this->hasMany(BookingBlackout::class);
     }
 
     /**
