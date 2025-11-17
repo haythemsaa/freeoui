@@ -1,0 +1,486 @@
+openapi: 3.0.0
+info:
+  title: FreeOui API
+  description: API documentation for FreeOui proximity-based promotional platform
+  version: 1.0.0
+  contact:
+    email: api@freeoui.tn
+  license:
+    name: Proprietary
+
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Local development server
+  - url: https://api.freeoui.tn/v1
+    description: Production server
+
+tags:
+  - name: Authentication
+    description: User and merchant authentication endpoints
+  - name: Advantages
+    description: Promotional offers management
+  - name: QR Codes
+    description: QR code generation and validation
+  - name: Proximity
+    description: Location tracking and proximity alerts
+  - name: Merchants
+    description: Merchant portal endpoints
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        first_name:
+          type: string
+        last_name:
+          type: string
+        phone_number:
+          type: string
+        email:
+          type: string
+          format: email
+          nullable: true
+        city_id:
+          type: integer
+        language:
+          type: string
+          enum: [fr, ar]
+        points_balance:
+          type: integer
+        level:
+          type: string
+          enum: [bronze, silver, gold, platinum]
+        created_at:
+          type: string
+          format: date-time
+
+    Advantage:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        type:
+          type: string
+          enum: [percentage, fixed_amount, 2for1, free_item]
+        discount_percentage:
+          type: number
+          nullable: true
+        discount_amount:
+          type: number
+          nullable: true
+        valid_from:
+          type: string
+          format: date
+        valid_until:
+          type: string
+          format: date
+        category:
+          $ref: '#/components/schemas/Category'
+        merchant:
+          $ref: '#/components/schemas/Merchant'
+        is_active:
+          type: boolean
+        usage_count:
+          type: integer
+        usage_limit:
+          type: integer
+          nullable: true
+
+    Category:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        icon:
+          type: string
+        color:
+          type: string
+
+    Merchant:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        address:
+          type: string
+        latitude:
+          type: number
+        longitude:
+          type: number
+        rating:
+          type: number
+        is_active:
+          type: boolean
+
+    QRCode:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        advantage_id:
+          type: string
+        valid_from:
+          type: string
+          format: date-time
+        valid_until:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [active, used, cancelled, expired]
+
+    Error:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+        errors:
+          type: object
+          additionalProperties: true
+
+paths:
+  /auth/register:
+    post:
+      tags:
+        - Authentication
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - phone_number
+                - country_code
+                - first_name
+                - last_name
+                - city_id
+              properties:
+                phone_number:
+                  type: string
+                  example: "20123456"
+                country_code:
+                  type: string
+                  example: "+216"
+                first_name:
+                  type: string
+                  example: "Ahmed"
+                last_name:
+                  type: string
+                  example: "Ben Ali"
+                city_id:
+                  type: integer
+                  example: 1
+                language:
+                  type: string
+                  enum: [fr, ar]
+                  default: fr
+      responses:
+        '200':
+          description: OTP sent successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      otp_sent:
+                        type: boolean
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/verify-otp:
+    post:
+      tags:
+        - Authentication
+      summary: Verify OTP and complete registration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - phone_number
+                - otp_code
+              properties:
+                phone_number:
+                  type: string
+                otp_code:
+                  type: string
+      responses:
+        '200':
+          description: OTP verified, tokens issued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        $ref: '#/components/schemas/User'
+                      access_token:
+                        type: string
+                      refresh_token:
+                        type: string
+
+  /advantages:
+    get:
+      tags:
+        - Advantages
+      summary: Get list of advantages
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: latitude
+          in: query
+          schema:
+            type: number
+        - name: longitude
+          in: query
+          schema:
+            type: number
+        - name: radius
+          in: query
+          schema:
+            type: integer
+            default: 1000
+        - name: category_ids
+          in: query
+          schema:
+            type: array
+            items:
+              type: integer
+        - name: min_discount
+          in: query
+          schema:
+            type: integer
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [distance, discount, popularity, rating]
+            default: distance
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+      responses:
+        '200':
+          description: List of advantages
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      advantages:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Advantage'
+                      pagination:
+                        type: object
+
+  /qr-codes/generate:
+    post:
+      tags:
+        - QR Codes
+      summary: Generate a QR code for an advantage
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - advantage_id
+              properties:
+                advantage_id:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: QR code generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      qr_code:
+                        $ref: '#/components/schemas/QRCode'
+
+  /qr-codes/validate:
+    post:
+      tags:
+        - QR Codes
+      summary: Validate a QR code (Merchant only)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - qr_code
+              properties:
+                qr_code:
+                  type: string
+                original_amount:
+                  type: number
+                latitude:
+                  type: number
+                longitude:
+                  type: number
+                notes:
+                  type: string
+      responses:
+        '200':
+          description: QR code validated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      transaction:
+                        type: object
+                      advantage:
+                        type: object
+                      user:
+                        type: object
+
+  /proximity/location:
+    post:
+      tags:
+        - Proximity
+      summary: Update user location
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - latitude
+                - longitude
+              properties:
+                latitude:
+                  type: number
+                  example: 36.8065
+                longitude:
+                  type: number
+                  example: 10.1815
+                accuracy_meters:
+                  type: number
+                altitude:
+                  type: number
+                speed_mps:
+                  type: number
+                heading_degrees:
+                  type: number
+                source:
+                  type: string
+                  enum: [foreground, background]
+      responses:
+        '200':
+          description: Location updated
+
+  /proximity/preferences:
+    get:
+      tags:
+        - Proximity
+      summary: Get proximity preferences
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Proximity preferences
+    put:
+      tags:
+        - Proximity
+      summary: Update proximity preferences
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                alerts_enabled:
+                  type: boolean
+                proximity_radius_meters:
+                  type: integer
+                max_alerts_per_day:
+                  type: integer
+                min_interval_minutes:
+                  type: integer
+                category_ids:
+                  type: array
+                  items:
+                    type: integer
+      responses:
+        '200':
+          description: Preferences updated
