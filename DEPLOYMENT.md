@@ -1,603 +1,668 @@
-# Guide de Déploiement FreeOui
+# FreeOui - Guide de Déploiement en Production
 
-## Table des matières
+Ce guide détaille la procédure complète de déploiement de FreeOui en production.
+
+## Table des Matières
 
 1. [Prérequis](#prérequis)
-2. [Configuration de l'environnement](#configuration-de-lenvironnement)
-3. [Déploiement Backend (Laravel)](#déploiement-backend-laravel)
-4. [Déploiement Web Admin (React)](#déploiement-web-admin-react)
-5. [Déploiement Mobile (Flutter)](#déploiement-mobile-flutter)
-6. [Configuration de la base de données](#configuration-de-la-base-de-données)
-7. [Configuration Redis](#configuration-redis)
-8. [Configuration Nginx](#configuration-nginx)
-9. [SSL/HTTPS](#sslhttps)
-10. [Monitoring et Logs](#monitoring-et-logs)
-11. [Backup et Restauration](#backup-et-restauration)
+2. [Configuration Serveur](#configuration-serveur)
+3. [Configuration DNS & SSL](#configuration-dns--ssl)
+4. [Déploiement Initial](#déploiement-initial)
+5. [Configuration des Variables d'Environnement](#configuration-des-variables-denvironnement)
+6. [CI/CD avec GitHub Actions](#cicd-avec-github-actions)
+7. [Monitoring & Logs](#monitoring--logs)
+8. [Backup & Restauration](#backup--restauration)
+9. [Maintenance](#maintenance)
+10. [Troubleshooting](#troubleshooting)
 
 ---
 
 ## Prérequis
 
-### Serveur de production
+### Serveur
 
 - **OS**: Ubuntu 22.04 LTS (recommandé)
-- **RAM**: Minimum 4GB, recommandé 8GB+
-- **CPU**: Minimum 2 cores, recommandé 4 cores+
-- **Stockage**: Minimum 50GB SSD
-- **Nom de domaine**: Configuré avec DNS pointant vers le serveur
+- **CPU**: 4 cores minimum
+- **RAM**: 8GB minimum (16GB recommandé)
+- **Storage**: 100GB SSD minimum
+- **Network**: IP publique statique
 
-### Logiciels requis
+### Logiciels Requis
 
 ```bash
-# Mise à jour du système
-sudo apt update && sudo apt upgrade -y
+# Installer Docker
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
+sudo usermod -aG docker $USER
 
-# Installation des dépendances
-sudo apt install -y \
-    nginx \
-    postgresql-16 \
-    postgresql-16-postgis-3 \
-    redis-server \
-    git \
-    curl \
-    unzip \
-    supervisor \
-    certbot \
-    python3-certbot-nginx
+# Installer Docker Compose
+sudo apt-get update
+sudo apt-get install docker-compose-plugin
+
+# Vérifier les installations
+docker --version
+docker compose version
 ```
 
-### PHP 8.3+
+### Services Tiers Requis
+
+- ✅ **Nom de domaine** (ex: freeoui.tn)
+- ✅ **Compte AWS S3** pour le stockage de fichiers
+- ✅ **Compte Firebase** pour les notifications push (FCM)
+- ✅ **Comptes paiement**: D17, Flouci, Paymee
+- ✅ **Sentry** pour le tracking d'erreurs (optionnel)
+- ✅ **New Relic** pour le monitoring (optionnel)
+
+---
+
+## Configuration Serveur
+
+### 1. Configuration Firewall
 
 ```bash
-# Ajout du repository PHP
-sudo add-apt-repository ppa:ondrej/php -y
-sudo apt update
+# UFW (Ubuntu)
+sudo ufw allow 22/tcp    # SSH
+sudo ufw allow 80/tcp    # HTTP
+sudo ufw allow 443/tcp   # HTTPS
+sudo ufw enable
 
-# Installation de PHP et extensions
-sudo apt install -y \
-    php8.3-fpm \
-    php8.3-cli \
-    php8.3-pgsql \
-    php8.3-redis \
-    php8.3-curl \
-    php8.3-mbstring \
-    php8.3-xml \
-    php8.3-zip \
-    php8.3-bcmath \
-    php8.3-gd \
-    php8.3-intl
+# Vérifier
+sudo ufw status
 ```
 
-### Composer
+### 2. Créer Utilisateur de Déploiement
 
 ```bash
-curl -sS https://getcomposer.org/installer | php
-sudo mv composer.phar /usr/local/bin/composer
+# Créer utilisateur
+sudo adduser deployer
+sudo usermod -aG docker deployer
+sudo usermod -aG sudo deployer
+
+# Configurer SSH pour l'utilisateur
+sudo mkdir -p /home/deployer/.ssh
+sudo cp ~/.ssh/authorized_keys /home/deployer/.ssh/
+sudo chown -R deployer:deployer /home/deployer/.ssh
+sudo chmod 700 /home/deployer/.ssh
+sudo chmod 600 /home/deployer/.ssh/authorized_keys
 ```
 
-### Node.js 20+
+### 3. Configuration Swap (si nécessaire)
 
 ```bash
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt install -y nodejs
+# Créer un fichier swap de 4GB
+sudo fallocate -l 4G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+
+# Rendre permanent
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 ```
 
 ---
 
-## Configuration de l'environnement
+## Configuration DNS & SSL
 
-### 1. Cloner le repository
+### 1. Configuration DNS
+
+Créez les enregistrements DNS suivants:
+
+```
+Type    Nom              Valeur
+A       api.freeoui.tn   <IP_SERVEUR>
+A       admin.freeoui.tn <IP_SERVEUR>
+A       freeoui.tn       <IP_SERVEUR>
+A       www.freeoui.tn   <IP_SERVEUR>
+```
+
+### 2. Installation Certificat SSL (Let's Encrypt)
 
 ```bash
-cd /var/www
-sudo git clone https://github.com/your-org/freeoui.git
-sudo chown -R www-data:www-data freeoui
-cd freeoui
+# Installer Certbot
+sudo apt-get update
+sudo apt-get install certbot
+
+# Arrêter temporairement nginx si en cours
+docker-compose -f docker-compose.prod.yml stop nginx
+
+# Générer le certificat
+sudo certbot certonly --standalone -d api.freeoui.tn
+
+# Copier les certificats
+sudo mkdir -p /opt/freeoui/docker/nginx/ssl
+sudo cp /etc/letsencrypt/live/api.freeoui.tn/fullchain.pem /opt/freeoui/docker/nginx/ssl/
+sudo cp /etc/letsencrypt/live/api.freeoui.tn/privkey.pem /opt/freeoui/docker/nginx/ssl/
+sudo chmod 644 /opt/freeoui/docker/nginx/ssl/*.pem
+
+# Redémarrer nginx
+docker-compose -f docker-compose.prod.yml start nginx
 ```
 
-### 2. Variables d'environnement Backend
+### 3. Renouvellement Automatique SSL
 
 ```bash
-cd backend
-cp .env.example .env
-```
+# Ajouter au crontab
+sudo crontab -e
 
-Éditer `.env`:
-
-```env
-APP_NAME=FreeOui
-APP_ENV=production
-APP_DEBUG=false
-APP_URL=https://api.freeoui.tn
-
-DB_CONNECTION=pgsql
-DB_HOST=127.0.0.1
-DB_PORT=5432
-DB_DATABASE=freeoui_prod
-DB_USERNAME=freeoui_user
-DB_PASSWORD=STRONG_PASSWORD_HERE
-
-REDIS_HOST=127.0.0.1
-REDIS_PASSWORD=null
-REDIS_PORT=6379
-
-QUEUE_CONNECTION=redis
-CACHE_DRIVER=redis
-SESSION_DRIVER=redis
-
-JWT_SECRET=GENERATE_WITH_php_artisan_jwt:secret
-JWT_TTL=60
-JWT_REFRESH_TTL=20160
-
-FIREBASE_CREDENTIALS=/var/www/freeoui/backend/storage/app/firebase-credentials.json
-
-# SMS Service (Tunisia)
-SMS_API_URL=https://api.sms-provider.tn/send
-SMS_API_KEY=your_sms_api_key
-SMS_SENDER_ID=FreeOui
-
-# Mail Configuration
-MAIL_MAILER=smtp
-MAIL_HOST=smtp.mailtrap.io
-MAIL_PORT=587
-MAIL_USERNAME=your_username
-MAIL_PASSWORD=your_password
-MAIL_ENCRYPTION=tls
-MAIL_FROM_ADDRESS=noreply@freeoui.tn
-MAIL_FROM_NAME="${APP_NAME}"
-
-# Proximity Alert Settings
-PROXIMITY_DEFAULT_RADIUS=1000
-PROXIMITY_MAX_ALERTS_PER_DAY=5
-PROXIMITY_MIN_INTERVAL_MINUTES=30
-
-# QR Code Settings
-QR_VALIDITY_HOURS=2
-QR_MAX_PER_USER_PER_DAY=10
-```
-
-### 3. Variables d'environnement Web Admin
-
-```bash
-cd ../web-admin
-cp .env.example .env
-```
-
-Éditer `.env`:
-
-```env
-VITE_API_BASE_URL=https://api.freeoui.tn/api/v1
-VITE_APP_NAME=FreeOui
+# Ajouter cette ligne (renouvellement tous les lundis à 3h du matin)
+0 3 * * 1 certbot renew --quiet && cp /etc/letsencrypt/live/api.freeoui.tn/*.pem /opt/freeoui/docker/nginx/ssl/ && docker-compose -f /opt/freeoui/docker-compose.prod.yml restart nginx
 ```
 
 ---
 
-## Déploiement Backend (Laravel)
+## Déploiement Initial
 
-### 1. Installation des dépendances
-
-```bash
-cd /var/www/freeoui/backend
-composer install --optimize-autoloader --no-dev
-```
-
-### 2. Configuration de l'application
+### 1. Cloner le Repository
 
 ```bash
-# Générer la clé d'application
-php artisan key:generate
+# Se connecter au serveur
+ssh deployer@<IP_SERVEUR>
 
-# Générer le secret JWT
-php artisan jwt:secret
+# Créer le répertoire de l'application
+sudo mkdir -p /opt/freeoui
+sudo chown deployer:deployer /opt/freeoui
+cd /opt/freeoui
 
-# Créer les liens symboliques
-php artisan storage:link
-
-# Optimisation
-php artisan config:cache
-php artisan route:cache
-php artisan view:cache
+# Cloner le repository
+git clone https://github.com/haythemsaa/freeoui.git .
+git checkout main
 ```
 
-### 3. Migrations et seeders
+### 2. Configuration des Variables d'Environnement
+
+```bash
+# Copier le fichier d'exemple
+cd /opt/freeoui/backend
+cp .env.production.example .env
+
+# Éditer le fichier .env
+nano .env
+```
+
+Voir section [Configuration des Variables d'Environnement](#configuration-des-variables-denvironnement) pour les détails.
+
+### 3. Générer la Clé d'Application
+
+```bash
+# Générer APP_KEY
+docker-compose -f /opt/freeoui/docker-compose.prod.yml run --rm backend php artisan key:generate
+```
+
+### 4. Lancer les Conteneurs
+
+```bash
+cd /opt/freeoui
+
+# Lancer en mode détaché
+docker-compose -f docker-compose.prod.yml up -d
+
+# Vérifier les logs
+docker-compose -f docker-compose.prod.yml logs -f
+```
+
+### 5. Initialiser la Base de Données
 
 ```bash
 # Exécuter les migrations
-php artisan migrate --force
+docker-compose -f docker-compose.prod.yml exec backend php artisan migrate --force
 
-# (Optionnel) Charger les données de test
-# php artisan db:seed --class=CategorySeeder
+# Seed les données initiales (catégories, achievements, etc.)
+docker-compose -f docker-compose.prod.yml exec backend php artisan db:seed --class=ProductionSeeder
+
+# Vérifier
+docker-compose -f docker-compose.prod.yml exec backend php artisan migrate:status
 ```
 
-### 4. Permissions
+### 6. Optimiser l'Application
 
 ```bash
-sudo chown -R www-data:www-data /var/www/freeoui/backend
-sudo chmod -R 755 /var/www/freeoui/backend
-sudo chmod -R 775 /var/www/freeoui/backend/storage
-sudo chmod -R 775 /var/www/freeoui/backend/bootstrap/cache
+# Cache des configurations
+docker-compose -f docker-compose.prod.yml exec backend php artisan config:cache
+docker-compose -f docker-compose.prod.yml exec backend php artisan route:cache
+docker-compose -f docker-compose.prod.yml exec backend php artisan view:cache
+docker-compose -f docker-compose.prod.yml exec backend php artisan optimize
 ```
 
-### 5. Configuration du Queue Worker (Supervisor)
-
-Créer `/etc/supervisor/conf.d/freeoui-worker.conf`:
-
-```ini
-[program:freeoui-worker]
-process_name=%(program_name)s_%(process_num)02d
-command=php /var/www/freeoui/backend/artisan queue:work redis --sleep=3 --tries=3 --max-time=3600
-autostart=true
-autorestart=true
-stopasgroup=true
-killasgroup=true
-user=www-data
-numprocs=2
-redirect_stderr=true
-stdout_logfile=/var/www/freeoui/backend/storage/logs/worker.log
-stopwaitsecs=3600
-```
-
-Activer:
+### 7. Vérifier le Déploiement
 
 ```bash
-sudo supervisorctl reread
-sudo supervisorctl update
-sudo supervisorctl start freeoui-worker:*
-```
+# Health check
+curl https://api.freeoui.tn/health
 
-### 6. Configuration des tâches planifiées (Cron)
+# Devrait retourner:
+# {"status":"ok","timestamp":"...","service":"FreeOui API"}
 
-```bash
-sudo crontab -e -u www-data
-```
-
-Ajouter:
-
-```
-* * * * * cd /var/www/freeoui/backend && php artisan schedule:run >> /dev/null 2>&1
+# Readiness check
+curl https://api.freeoui.tn/ready
 ```
 
 ---
 
-## Déploiement Web Admin (React)
+## Configuration des Variables d'Environnement
 
-### 1. Installation et build
-
-```bash
-cd /var/www/freeoui/web-admin
-npm install
-npm run build
-```
-
-Les fichiers de production seront dans `/var/www/freeoui/web-admin/dist`
-
----
-
-## Configuration de la base de données
-
-### 1. Créer la base de données
+### Variables Critiques
 
 ```bash
-sudo -u postgres psql
+# Application
+APP_NAME=FreeOui
+APP_ENV=production
+APP_KEY=base64:GENERER_AVEC_php_artisan_key:generate
+APP_DEBUG=false
+APP_URL=https://api.freeoui.tn
+
+# Database
+DB_CONNECTION=pgsql
+DB_HOST=postgres
+DB_PORT=5432
+DB_DATABASE=freeoui_production
+DB_USERNAME=freeoui_user
+DB_PASSWORD=<STRONG_PASSWORD_HERE>
+
+# Redis
+REDIS_HOST=redis
+REDIS_PASSWORD=<STRONG_PASSWORD_HERE>
+REDIS_PORT=6379
 ```
 
-```sql
-CREATE DATABASE freeoui_prod;
-CREATE USER freeoui_user WITH PASSWORD 'STRONG_PASSWORD_HERE';
-GRANT ALL PRIVILEGES ON DATABASE freeoui_prod TO freeoui_user;
-
--- Activer PostGIS
-\c freeoui_prod
-CREATE EXTENSION IF NOT EXISTS postgis;
-CREATE EXTENSION IF NOT EXISTS postgis_topology;
-
--- Donner les permissions
-GRANT ALL ON schema public TO freeoui_user;
-ALTER DATABASE freeoui_prod OWNER TO freeoui_user;
-
-\q
-```
-
-### 2. Configuration PostgreSQL
-
-Éditer `/etc/postgresql/16/main/postgresql.conf`:
-
-```ini
-# Performance
-shared_buffers = 256MB
-effective_cache_size = 1GB
-maintenance_work_mem = 128MB
-checkpoint_completion_target = 0.9
-wal_buffers = 16MB
-default_statistics_target = 100
-random_page_cost = 1.1
-effective_io_concurrency = 200
-work_mem = 6MB
-min_wal_size = 1GB
-max_wal_size = 4GB
-```
-
-Redémarrer:
+### Services de Paiement
 
 ```bash
-sudo systemctl restart postgresql
+# D17
+D17_API_URL=https://api.d17.tn
+D17_API_KEY=<YOUR_D17_API_KEY>
+D17_API_SECRET=<YOUR_D17_API_SECRET>
+
+# Flouci
+FLOUCI_API_URL=https://developers.flouci.com/api
+FLOUCI_APP_TOKEN=<YOUR_FLOUCI_APP_TOKEN>
+FLOUCI_APP_SECRET=<YOUR_FLOUCI_APP_SECRET>
+
+# Paymee
+PAYMEE_API_URL=https://api.paymee.tn
+PAYMEE_API_KEY=<YOUR_PAYMEE_API_KEY>
+PAYMEE_VENDOR_ID=<YOUR_PAYMEE_VENDOR_ID>
 ```
 
----
-
-## Configuration Redis
-
-Éditer `/etc/redis/redis.conf`:
-
-```ini
-# Bind to localhost only
-bind 127.0.0.1
-
-# Set maxmemory
-maxmemory 256mb
-maxmemory-policy allkeys-lru
-
-# Enable persistence
-save 900 1
-save 300 10
-save 60 10000
-```
-
-Redémarrer:
+### Stockage & Email
 
 ```bash
-sudo systemctl restart redis-server
+# AWS S3
+AWS_ACCESS_KEY_ID=<YOUR_AWS_ACCESS_KEY>
+AWS_SECRET_ACCESS_KEY=<YOUR_AWS_SECRET_KEY>
+AWS_DEFAULT_REGION=eu-west-1
+AWS_BUCKET=freeoui-storage
+
+# Email
+MAIL_MAILER=smtp
+MAIL_HOST=smtp.gmail.com
+MAIL_PORT=587
+MAIL_USERNAME=<YOUR_EMAIL>
+MAIL_PASSWORD=<YOUR_APP_PASSWORD>
+MAIL_FROM_ADDRESS=noreply@freeoui.tn
+```
+
+### Notifications & Monitoring
+
+```bash
+# Firebase Cloud Messaging
+FCM_SERVER_KEY=<YOUR_FCM_SERVER_KEY>
+
+# Sentry (Error Tracking)
+SENTRY_LARAVEL_DSN=<YOUR_SENTRY_DSN>
+SENTRY_TRACES_SAMPLE_RATE=0.2
+
+# New Relic (APM)
+NEW_RELIC_LICENSE_KEY=<YOUR_NEWRELIC_KEY>
+NEW_RELIC_APP_NAME=FreeOui-Production
 ```
 
 ---
 
-## Configuration Nginx
+## CI/CD avec GitHub Actions
 
-### 1. Backend API
+### 1. Configuration des Secrets GitHub
 
-Créer `/etc/nginx/sites-available/freeoui-api`:
+Allez dans `Settings > Secrets and variables > Actions` et ajoutez:
 
-```nginx
-server {
-    listen 80;
-    server_name api.freeoui.tn;
-    root /var/www/freeoui/backend/public;
+| Secret Name       | Description                          |
+|-------------------|--------------------------------------|
+| `SSH_PRIVATE_KEY` | Clé SSH privée pour déploiement     |
+| `SERVER_HOST`     | IP ou hostname du serveur            |
+| `SERVER_USER`     | Utilisateur SSH (ex: deployer)       |
+| `DB_USERNAME`     | Username PostgreSQL (pour .env)      |
+| `DB_PASSWORD`     | Password PostgreSQL (pour .env)      |
+| `REDIS_PASSWORD`  | Password Redis (pour .env)           |
 
-    add_header X-Frame-Options "SAMEORIGIN";
-    add_header X-Content-Type-Options "nosniff";
-
-    index index.php;
-
-    charset utf-8;
-
-    location / {
-        try_files $uri $uri/ /index.php?$query_string;
-    }
-
-    location = /favicon.ico { access_log off; log_not_found off; }
-    location = /robots.txt  { access_log off; log_not_found off; }
-
-    error_page 404 /index.php;
-
-    location ~ \.php$ {
-        fastcgi_pass unix:/var/run/php/php8.3-fpm.sock;
-        fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
-        include fastcgi_params;
-        fastcgi_hide_header X-Powered-By;
-    }
-
-    location ~ /\.(?!well-known).* {
-        deny all;
-    }
-
-    # Rate limiting
-    limit_req_zone $binary_remote_addr zone=api:10m rate=10r/s;
-    limit_req zone=api burst=20 nodelay;
-
-    # Compression
-    gzip on;
-    gzip_vary on;
-    gzip_min_length 1024;
-    gzip_types text/plain text/css application/json application/javascript text/xml application/xml;
-}
-```
-
-### 2. Web Admin
-
-Créer `/etc/nginx/sites-available/freeoui-admin`:
-
-```nginx
-server {
-    listen 80;
-    server_name admin.freeoui.tn;
-    root /var/www/freeoui/web-admin/dist;
-
-    index index.html;
-
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-
-    # Cache static assets
-    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
-        expires 1y;
-        add_header Cache-Control "public, immutable";
-    }
-
-    # Compression
-    gzip on;
-    gzip_vary on;
-    gzip_min_length 1024;
-    gzip_types text/plain text/css application/json application/javascript text/xml application/xml;
-}
-```
-
-### 3. Activer les sites
+### 2. Générer la Clé SSH
 
 ```bash
-sudo ln -s /etc/nginx/sites-available/freeoui-api /etc/nginx/sites-enabled/
-sudo ln -s /etc/nginx/sites-available/freeoui-admin /etc/nginx/sites-enabled/
-sudo nginx -t
-sudo systemctl restart nginx
+# Sur votre machine locale
+ssh-keygen -t ed25519 -C "github-actions" -f github-actions-key
+
+# Copier la clé publique sur le serveur
+ssh-copy-id -i github-actions-key.pub deployer@<IP_SERVEUR>
+
+# Ajouter la clé privée dans GitHub Secrets
+cat github-actions-key
+# Copier le contenu complet dans SSH_PRIVATE_KEY
+```
+
+### 3. Workflow Automatique
+
+Le workflow `.github/workflows/deploy-production.yml` se déclenche automatiquement sur:
+- Push vers `main` ou `master`
+- Déclenchement manuel via GitHub Actions UI
+
+**Étapes du workflow**:
+1. ✅ Tests (PHPUnit, PHPStan)
+2. 🐳 Build de l'image Docker
+3. 🚀 Déploiement sur serveur
+4. ❤️ Health check post-déploiement
+5. ↩️ Rollback automatique si échec
+
+---
+
+## Monitoring & Logs
+
+### 1. Consulter les Logs
+
+```bash
+# Logs de tous les services
+docker-compose -f docker-compose.prod.yml logs -f
+
+# Logs d'un service spécifique
+docker-compose -f docker-compose.prod.yml logs -f backend
+docker-compose -f docker-compose.prod.yml logs -f nginx
+docker-compose -f docker-compose.prod.yml logs -f postgres
+
+# Logs Laravel
+docker-compose -f docker-compose.prod.yml exec backend tail -f storage/logs/laravel.log
+```
+
+### 2. Monitoring avec New Relic
+
+Configurez New Relic dans `.env`:
+
+```bash
+NEW_RELIC_LICENSE_KEY=<YOUR_KEY>
+NEW_RELIC_APP_NAME=FreeOui-Production
+```
+
+### 3. Erreurs avec Sentry
+
+Les erreurs sont automatiquement envoyées à Sentry si `SENTRY_LARAVEL_DSN` est configuré.
+
+Vérifiez: https://sentry.io/organizations/<org>/issues/
+
+### 4. Métriques Système
+
+```bash
+# Utilisation CPU/Mémoire des conteneurs
+docker stats
+
+# Espace disque
+df -h
+
+# Logs système
+journalctl -u docker -f
 ```
 
 ---
 
-## SSL/HTTPS
+## Backup & Restauration
 
-### Configuration avec Let's Encrypt
+### 1. Backup Automatique
+
+Un script de backup automatique est configuré dans `/opt/freeoui/docker/backup/backup.sh`.
+
+**Configuration du cron**:
 
 ```bash
-# Backend API
-sudo certbot --nginx -d api.freeoui.tn
+# Éditer le crontab
+crontab -e
 
-# Web Admin
-sudo certbot --nginx -d admin.freeoui.tn
-
-# Auto-renouvellement
-sudo certbot renew --dry-run
+# Backup quotidien à 2h du matin
+0 2 * * * /opt/freeoui/docker/backup/backup.sh >> /var/log/freeoui-backup.log 2>&1
 ```
 
----
-
-## Monitoring et Logs
-
-### 1. Logs Laravel
+### 2. Backup Manuel
 
 ```bash
-# Voir les logs en temps réel
-tail -f /var/www/freeoui/backend/storage/logs/laravel.log
+# Exécuter le script de backup
+cd /opt/freeoui
+./docker/backup/backup.sh
 
-# Logs des workers
-tail -f /var/www/freeoui/backend/storage/logs/worker.log
+# Les backups sont stockés dans: /opt/freeoui/backups/
 ```
 
-### 2. Logs Nginx
+### 3. Restauration d'un Backup
 
 ```bash
-# Access logs
-tail -f /var/log/nginx/access.log
+# Lister les backups disponibles
+ls -lh /opt/freeoui/backups/
 
-# Error logs
-tail -f /var/log/nginx/error.log
+# Restaurer un backup spécifique
+cd /opt/freeoui
+./docker/backup/restore.sh /opt/freeoui/backups/freeoui_production_2024-01-22_020001.sql.gz
 ```
 
-### 3. Logs PostgreSQL
+### 4. Upload vers S3 (Recommandé)
 
 ```bash
-tail -f /var/log/postgresql/postgresql-16-main.log
-```
+# Installer AWS CLI
+sudo apt-get install awscli
 
-### 4. Rotation des logs
+# Configurer AWS
+aws configure
 
-Laravel gère automatiquement la rotation. Pour Nginx:
-
-```bash
-sudo nano /etc/logrotate.d/nginx
-```
-
----
-
-## Backup et Restauration
-
-### 1. Script de backup automatique
-
-Créer `/var/www/freeoui/scripts/backup.sh`:
-
-```bash
+# Script pour upload automatique
 #!/bin/bash
-
-BACKUP_DIR="/var/backups/freeoui"
-DATE=$(date +%Y-%m-%d_%H-%M-%S)
-
-# Créer le répertoire de backup
-mkdir -p $BACKUP_DIR
-
-# Backup de la base de données
-pg_dump -U freeoui_user freeoui_prod | gzip > $BACKUP_DIR/db_$DATE.sql.gz
-
-# Backup des fichiers uploads
-tar -czf $BACKUP_DIR/storage_$DATE.tar.gz /var/www/freeoui/backend/storage/app
-
-# Garder seulement les 7 derniers backups
-find $BACKUP_DIR -name "db_*.sql.gz" -mtime +7 -delete
-find $BACKUP_DIR -name "storage_*.tar.gz" -mtime +7 -delete
-
-echo "Backup completed: $DATE"
-```
-
-Rendre exécutable et planifier:
-
-```bash
-chmod +x /var/www/freeoui/scripts/backup.sh
-
-# Ajouter au cron (tous les jours à 2h du matin)
-sudo crontab -e
-0 2 * * * /var/www/freeoui/scripts/backup.sh >> /var/log/freeoui-backup.log 2>&1
-```
-
-### 2. Restauration
-
-```bash
-# Restaurer la base de données
-gunzip < /var/backups/freeoui/db_2024-01-15_02-00-00.sql.gz | psql -U freeoui_user freeoui_prod
-
-# Restaurer les fichiers
-tar -xzf /var/backups/freeoui/storage_2024-01-15_02-00-00.tar.gz -C /
+BACKUP_FILE="/opt/freeoui/backups/latest.sql.gz"
+aws s3 cp $BACKUP_FILE s3://freeoui-backups/database/$(date +%Y-%m-%d)/
 ```
 
 ---
 
-## Checklist de déploiement
+## Maintenance
 
-- [ ] Serveur configuré avec les prérequis
-- [ ] Base de données PostgreSQL + PostGIS configurée
-- [ ] Redis configuré
-- [ ] Backend Laravel déployé et optimisé
-- [ ] Web Admin React buildé et déployé
-- [ ] Nginx configuré pour les deux applications
-- [ ] SSL/HTTPS activé avec Let's Encrypt
-- [ ] Queue workers configurés avec Supervisor
-- [ ] Tâches planifiées configurées (cron)
-- [ ] Firebase credentials configurées
-- [ ] Backups automatiques configurés
-- [ ] Monitoring et logs en place
-- [ ] Tests de charge effectués
-- [ ] Documentation mise à jour
+### 1. Mettre à Jour l'Application
+
+```bash
+cd /opt/freeoui
+
+# Récupérer les dernières modifications
+git pull origin main
+
+# Reconstruire les images si nécessaire
+docker-compose -f docker-compose.prod.yml build
+
+# Redémarrer les services
+docker-compose -f docker-compose.prod.yml down
+docker-compose -f docker-compose.prod.yml up -d
+
+# Exécuter les migrations
+docker-compose -f docker-compose.prod.yml exec backend php artisan migrate --force
+
+# Nettoyer les caches
+docker-compose -f docker-compose.prod.yml exec backend php artisan optimize:clear
+docker-compose -f docker-compose.prod.yml exec backend php artisan config:cache
+docker-compose -f docker-compose.prod.yml exec backend php artisan route:cache
+docker-compose -f docker-compose.prod.yml exec backend php artisan view:cache
+```
+
+### 2. Redémarrer les Services
+
+```bash
+# Redémarrer tous les services
+docker-compose -f docker-compose.prod.yml restart
+
+# Redémarrer un service spécifique
+docker-compose -f docker-compose.prod.yml restart backend
+docker-compose -f docker-compose.prod.yml restart queue
+```
+
+### 3. Nettoyer les Ressources Docker
+
+```bash
+# Nettoyer les conteneurs arrêtés
+docker container prune -f
+
+# Nettoyer les images non utilisées
+docker image prune -a -f
+
+# Nettoyer les volumes non utilisés (ATTENTION!)
+docker volume prune -f
+
+# Nettoyer tout (TRÈS DANGEREUX!)
+# docker system prune -a --volumes -f
+```
+
+### 4. Commandes Artisan Utiles
+
+```bash
+# Nettoyer les anciennes sessions
+docker-compose -f docker-compose.prod.yml exec backend php artisan sync:process
+
+# Nettoyer les notifications
+docker-compose -f docker-compose.prod.yml exec backend php artisan notifications:cleanup
+
+# Générer les rapports analytics
+docker-compose -f docker-compose.prod.yml exec backend php artisan analytics:report
+
+# Traiter les commissions
+docker-compose -f docker-compose.prod.yml exec backend php artisan commissions:approve
+
+# Traiter les payouts
+docker-compose -f docker-compose.prod.yml exec backend php artisan payouts:process-auto
+```
 
 ---
 
-## Performance et Sécurité
+## Troubleshooting
 
-### Optimisation des performances
+### 1. Erreur "Connection refused" à la base de données
 
-1. **OPcache PHP**: Déjà activé avec PHP-FPM
-2. **Redis**: Utilisé pour cache, sessions et queues
-3. **Database indexing**: PostGIS GIST indexes sur les colonnes géographiques
-4. **CDN**: Considérer Cloudflare pour les assets statiques
-
-### Sécurité
-
-1. **Firewall**:
 ```bash
-sudo ufw allow 22/tcp
-sudo ufw allow 80/tcp
-sudo ufw allow 443/tcp
-sudo ufw enable
+# Vérifier que PostgreSQL est en cours d'exécution
+docker-compose -f docker-compose.prod.yml ps postgres
+
+# Vérifier les logs
+docker-compose -f docker-compose.prod.yml logs postgres
+
+# Redémarrer PostgreSQL
+docker-compose -f docker-compose.prod.yml restart postgres
 ```
 
-2. **Fail2ban**:
+### 2. Erreur 502 Bad Gateway (Nginx)
+
 ```bash
-sudo apt install fail2ban -y
-sudo systemctl enable fail2ban
+# Vérifier que le backend est en cours d'exécution
+docker-compose -f docker-compose.prod.yml ps backend
+
+# Vérifier les logs backend
+docker-compose -f docker-compose.prod.yml logs backend
+
+# Vérifier la configuration nginx
+docker-compose -f docker-compose.prod.yml exec nginx nginx -t
+
+# Redémarrer nginx
+docker-compose -f docker-compose.prod.yml restart nginx
 ```
 
-3. **Rate limiting**: Configuré dans Nginx et Laravel
+### 3. Queue Workers ne traitent pas les jobs
+
+```bash
+# Vérifier les jobs en attente
+docker-compose -f docker-compose.prod.yml exec backend php artisan queue:work --once
+
+# Redémarrer le worker
+docker-compose -f docker-compose.prod.yml restart queue
+
+# Vérifier Redis
+docker-compose -f docker-compose.prod.yml exec redis redis-cli ping
+```
+
+### 4. Espace disque insuffisant
+
+```bash
+# Vérifier l'espace disque
+df -h
+
+# Nettoyer les logs
+sudo journalctl --vacuum-time=7d
+
+# Nettoyer Docker
+docker system prune -a -f
+
+# Nettoyer les anciens backups (garder 30 derniers jours)
+find /opt/freeoui/backups -type f -mtime +30 -delete
+```
+
+### 5. Certificat SSL expiré
+
+```bash
+# Vérifier la date d'expiration
+openssl x509 -in /opt/freeoui/docker/nginx/ssl/fullchain.pem -noout -dates
+
+# Renouveler manuellement
+sudo certbot renew --force-renewal
+
+# Copier les nouveaux certificats
+sudo cp /etc/letsencrypt/live/api.freeoui.tn/*.pem /opt/freeoui/docker/nginx/ssl/
+
+# Redémarrer nginx
+docker-compose -f docker-compose.prod.yml restart nginx
+```
+
+### 6. Performance lente
+
+```bash
+# Vérifier l'utilisation des ressources
+docker stats
+
+# Optimiser OPcache
+docker-compose -f docker-compose.prod.yml exec backend php artisan optimize
+
+# Analyser les requêtes lentes
+docker-compose -f docker-compose.prod.yml exec postgres psql -U freeoui_user -d freeoui_production -c "SELECT * FROM pg_stat_statements ORDER BY mean_time DESC LIMIT 10;"
+
+# Redémarrer tous les services
+docker-compose -f docker-compose.prod.yml restart
+```
 
 ---
 
-## Support et Maintenance
+## Checklist de Déploiement
+
+Avant de mettre en production, vérifiez:
+
+- [ ] DNS configuré et propagé
+- [ ] Certificat SSL installé et valide
+- [ ] Variables d'environnement configurées
+- [ ] Firewall configuré (ports 80, 443, 22 ouverts)
+- [ ] Backup automatique configuré
+- [ ] Monitoring (Sentry, New Relic) configuré
+- [ ] GitHub Actions secrets configurés
+- [ ] Tests passent en CI/CD
+- [ ] Health check répond `/health` et `/ready`
+- [ ] Migrations exécutées
+- [ ] Données initiales seedées
+- [ ] Queue workers en cours d'exécution
+- [ ] Logs accessibles et propres
+- [ ] Plan de rollback testé
+
+---
+
+## Support
 
 Pour toute question ou problème:
-- Email: support@freeoui.tn
-- Documentation: https://docs.freeoui.tn
+
+- 📧 Email: support@freeoui.tn
+- 📚 Documentation: https://docs.freeoui.tn
+- 🐛 Issues: https://github.com/haythemsaa/freeoui/issues
+
+---
+
+**Version**: 1.0.0  
+**Dernière mise à jour**: Janvier 2025  
+**Auteur**: Équipe FreeOui

@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\V1\AdvantageController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\ProximityController;
 use App\Http\Controllers\Api\V1\QRCodeController;
+use App\Http\Controllers\HealthController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -13,14 +14,9 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 */
 
-// API Health Check
-Route::get('/health', function () {
-    return response()->json([
-        'status' => 'ok',
-        'timestamp' => now()->toISOString(),
-        'version' => '1.0.0',
-    ]);
-});
+// API Health Check & Readiness
+Route::get('/health', [HealthController::class, 'index']);
+Route::get('/ready', [HealthController::class, 'readiness']);
 
 // API V1 Routes
 Route::prefix('v1')->group(function () {
