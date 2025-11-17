@@ -236,6 +236,54 @@ class User extends Model
     }
 
     /**
+     * Get the user's conversations
+     */
+    public function conversations(): HasMany
+    {
+        return $this->hasMany(Conversation::class);
+    }
+
+    /**
+     * Get the user's notifications
+     */
+    public function notifications(): HasMany
+    {
+        return $this->hasMany(Notification::class);
+    }
+
+    /**
+     * Get the user's notification preferences
+     */
+    public function notificationPreferences(): HasOne
+    {
+        return $this->hasOne(NotificationPreference::class);
+    }
+
+    /**
+     * Get the user's social shares
+     */
+    public function socialShares(): HasMany
+    {
+        return $this->hasMany(SocialShare::class);
+    }
+
+    /**
+     * Get the user's analytics events
+     */
+    public function analyticsEvents(): HasMany
+    {
+        return $this->hasMany(AnalyticsEvent::class);
+    }
+
+    /**
+     * Get the user's sessions
+     */
+    public function sessions(): HasMany
+    {
+        return $this->hasMany(UserSession::class);
+    }
+
+    /**
      * Get the user's governorate
      */
     public function governorate(): BelongsTo

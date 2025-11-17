@@ -2,92 +2,84 @@
 
 namespace App\Services;
 
+use App\Models\User;
+use App\Models\Notification;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class NotificationService
 {
     /**
-     * Send push notification via Firebase Cloud Messaging
+     * Send notification to user
      */
-    public function sendPushNotification(
-        string $fcmToken,
+    public function send(
+        User $user,
         string $title,
-        string $body,
-        array $data = []
-    ): ?string {
+        string $message,
+        string $category = 'system',
+        array $data = [],
+        string $priority = 'normal',
+        ?string $actionUrl = null,
+        ?string $imageUrl = null
+    ): Notification {
+        $notification = Notification::create([
+            'user_id' => $user->id,
+            'notification_type' => 'push',
+            'title' => $title,
+            'message' => $message,
+            'category' => $category,
+            'priority' => $priority,
+            'data' => $data,
+            'action_url' => $actionUrl,
+            'image_url' => $imageUrl,
+        ]);
+
+        if ($user->fcm_token) {
+            $this->sendPushNotification($notification);
+        }
+
+        return $notification;
+    }
+
+    protected function sendPushNotification(Notification $notification): bool
+    {
+        $user = $notification->user;
+
         try {
             $response = Http::withHeaders([
                 'Authorization' => 'key=' . config('services.fcm.server_key'),
                 'Content-Type' => 'application/json',
             ])->post('https://fcm.googleapis.com/fcm/send', [
-                'to' => $fcmToken,
+                'to' => $user->fcm_token,
                 'notification' => [
-                    'title' => $title,
-                    'body' => $body,
-                    'sound' => 'default',
-                    'badge' => '1',
+                    'title' => $notification->title,
+                    'body' => $notification->message,
+                    'image' => $notification->image_url,
                 ],
-                'data' => $data,
-                'priority' => 'high',
+                'data' => array_merge($notification->data ?? [], [
+                    'notification_id' => $notification->id,
+                ]),
             ]);
 
             if ($response->successful()) {
-                $result = $response->json();
-                return $result['results'][0]['message_id'] ?? null;
+                $notification->markAsSent(['fcm' => $response->json()]);
+                return true;
             }
 
-            Log::error('FCM notification failed', [
-                'status' => $response->status(),
-                'body' => $response->body(),
-            ]);
-
-            return null;
+            return false;
         } catch (\Exception $e) {
-            Log::error('Exception sending FCM notification', [
-                'error' => $e->getMessage(),
-            ]);
-
-            return null;
-        }
-    }
-
-    /**
-     * Send SMS via Twilio
-     */
-    public function sendSMS(string $phoneNumber, string $message): bool
-    {
-        try {
-            // Twilio implementation
-            $accountSid = config('services.twilio.account_sid');
-            $authToken = config('services.twilio.auth_token');
-            $fromNumber = config('services.twilio.from_number');
-
-            $response = Http::withBasicAuth($accountSid, $authToken)
-                ->asForm()
-                ->post("https://api.twilio.com/2010-04-01/Accounts/{$accountSid}/Messages.json", [
-                    'From' => $fromNumber,
-                    'To' => $phoneNumber,
-                    'Body' => $message,
-                ]);
-
-            return $response->successful();
-        } catch (\Exception $e) {
-            Log::error('Failed to send SMS', [
-                'error' => $e->getMessage(),
-                'phone' => $phoneNumber,
-            ]);
-
+            Log::error('FCM failed', ['error' => $e->getMessage()]);
             return false;
         }
     }
 
-    /**
-     * Send OTP code via SMS
-     */
-    public function sendOTP(string $phoneNumber, string $code): bool
+    public function getUnread(User $user, int $limit = 20): array
     {
-        $message = "Votre code de vérification FreeOui est : {$code}. Ce code expire dans 5 minutes.";
-        return $this->sendSMS($phoneNumber, $message);
+        return Notification::where('user_id', $user->id)
+            ->unread()
+            ->orderByDesc('created_at')
+            ->limit($limit)
+            ->get()
+            ->toArray();
     }
 }
