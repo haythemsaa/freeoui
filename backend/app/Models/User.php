@@ -52,6 +52,13 @@ class User extends Model
         'referral_code',
         'referred_by_id',
         'successful_referrals',
+        // Phase 4: Engagement fields
+        'is_premium',
+        'coins_balance',
+        'checkin_streak',
+        'last_checkin_date',
+        'showcased_stickers',
+        'wallet_balance',
     ];
 
     protected $hidden = [
@@ -71,6 +78,12 @@ class User extends Model
         'is_active' => 'boolean',
         'is_verified' => 'boolean',
         'last_login_at' => 'datetime',
+        'is_premium' => 'boolean',
+        'coins_balance' => 'integer',
+        'checkin_streak' => 'integer',
+        'last_checkin_date' => 'date',
+        'showcased_stickers' => 'array',
+        'wallet_balance' => 'decimal:2',
     ];
 
     /**
@@ -364,6 +377,47 @@ class User extends Model
                 break;
             }
         }
+    }
+
+    /**
+     * Get the user's subscriptions
+     */
+    public function subscriptions(): HasMany
+    {
+        return $this->hasMany(Subscription::class);
+    }
+
+    /**
+     * Get the user's mayorships
+     */
+    public function mayorships(): HasMany
+    {
+        return $this->hasMany(Mayorship::class);
+    }
+
+    /**
+     * Get the user's sticker collection
+     */
+    public function stickerCollection(): HasMany
+    {
+        return $this->hasMany(StickerCollection::class);
+    }
+
+    /**
+     * Get the user's challenge participations
+     */
+    public function challengeParticipations(): HasMany
+    {
+        return $this->hasMany(ChallengeParticipation::class);
+    }
+
+    /**
+     * Get the user's friends (many-to-many self-referencing)
+     */
+    public function friends(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'user_friends', 'user_id', 'friend_id')
+            ->withTimestamps();
     }
 
     /**

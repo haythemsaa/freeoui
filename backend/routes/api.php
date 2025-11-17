@@ -4,13 +4,18 @@ use App\Http\Controllers\Api\V1\AdvantageController;
 use App\Http\Controllers\Api\V1\AnalyticsController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BoostController;
+use App\Http\Controllers\Api\V1\ChallengeController;
 use App\Http\Controllers\Api\V1\ChatController;
+use App\Http\Controllers\Api\V1\LeaderboardController;
+use App\Http\Controllers\Api\V1\MayorshipController;
 use App\Http\Controllers\Api\V1\NotificationController;
 use App\Http\Controllers\Api\V1\OfflineSyncController;
 use App\Http\Controllers\Api\V1\PaymentController;
 use App\Http\Controllers\Api\V1\ProximityController;
 use App\Http\Controllers\Api\V1\QRCodeController;
 use App\Http\Controllers\Api\V1\SocialController;
+use App\Http\Controllers\Api\V1\StickerController;
+use App\Http\Controllers\Api\V1\SubscriptionController;
 use App\Http\Controllers\Api\V1\WalletController;
 use App\Http\Controllers\HealthController;
 use Illuminate\Http\Request;
@@ -230,6 +235,58 @@ Route::prefix('v1')->group(function () {
             Route::get('/status', [OfflineSyncController::class, 'queueStatus']);
             Route::post('/retry', [OfflineSyncController::class, 'retryFailed']);
             Route::post('/{queueId}/resolve', [OfflineSyncController::class, 'resolveConflict']);
+        });
+
+        // ========== Phase 4: Engagement Boost Routes ==========
+
+        // Subscription Routes (FreeOui Plus)
+        Route::prefix('subscriptions')->group(function () {
+            Route::get('/plans', [SubscriptionController::class, 'plans']);
+            Route::get('/current', [SubscriptionController::class, 'current']);
+            Route::post('/subscribe', [SubscriptionController::class, 'subscribe']);
+            Route::post('/cancel', [SubscriptionController::class, 'cancel']);
+            Route::post('/renew', [SubscriptionController::class, 'renew']);
+            Route::get('/history', [SubscriptionController::class, 'history']);
+        });
+
+        // Leaderboard Routes
+        Route::prefix('leaderboards')->group(function () {
+            Route::get('/global', [LeaderboardController::class, 'global']);
+            Route::get('/friends', [LeaderboardController::class, 'friends']);
+            Route::get('/governorate', [LeaderboardController::class, 'governorate']);
+            Route::get('/category', [LeaderboardController::class, 'category']);
+            Route::get('/rank', [LeaderboardController::class, 'rank']);
+        });
+
+        // Mayorship Routes
+        Route::prefix('mayorships')->group(function () {
+            Route::post('/checkin', [MayorshipController::class, 'checkin']);
+            Route::get('/my-mayorships', [MayorshipController::class, 'myMayorships']);
+            Route::get('/history', [MayorshipController::class, 'checkinHistory']);
+            Route::get('/stats', [MayorshipController::class, 'stats']);
+            Route::get('/{merchantId}/mayor', [MayorshipController::class, 'currentMayor']);
+            Route::get('/{merchantId}/challengers', [MayorshipController::class, 'challengers']);
+        });
+
+        // Sticker Collection Routes
+        Route::prefix('stickers')->group(function () {
+            Route::get('/collection', [StickerController::class, 'collection']);
+            Route::get('/statistics', [StickerController::class, 'statistics']);
+            Route::get('/leaderboard', [StickerController::class, 'leaderboard']);
+            Route::get('/tiers', [StickerController::class, 'tiers']);
+            Route::post('/showcase', [StickerController::class, 'showcase']);
+            Route::get('/category/{categoryId}/progress', [StickerController::class, 'categoryProgress']);
+        });
+
+        // Challenge Routes
+        Route::prefix('challenges')->group(function () {
+            Route::get('/', [ChallengeController::class, 'index']);
+            Route::get('/{id}', [ChallengeController::class, 'show']);
+            Route::post('/{id}/participate', [ChallengeController::class, 'participate']);
+            Route::get('/user/history', [ChallengeController::class, 'history']);
+            Route::get('/{id}/leaderboard', [ChallengeController::class, 'leaderboard']);
+            Route::get('/{id}/progress', [ChallengeController::class, 'progress']);
+            Route::get('/user/statistics', [ChallengeController::class, 'statistics']);
         });
     });
 
