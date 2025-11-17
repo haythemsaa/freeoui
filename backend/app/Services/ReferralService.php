@@ -4,20 +4,16 @@ namespace App\Services;
 
 use App\Models\User;
 use App\Models\Referral;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class ReferralService
 {
-    // Default reward configuration (can be moved to config file)
-    protected const REFERRER_POINTS = 500;
-    protected const REFEREE_POINTS = 300;
-    protected const REFERRER_AMOUNT = 5.000; // TND
-    protected const REFEREE_AMOUNT = 3.000; // TND
-    protected const MIN_PURCHASE_AMOUNT = 20.000; // TND
+    public function __construct(
+        private NotificationService $notificationService
+    ) {}
 
     /**
-     * Generate referral code for user
+     * Generate unique referral code for user
      */
     public function generateReferralCode(User $user): string
     {
@@ -25,9 +21,12 @@ class ReferralService
             return $user->referral_code;
         }
 
-        do {
-            $code = strtoupper(Str::random(8));
-        } while (User::where('referral_code', $code)->exists());
+        $code = strtoupper(Str::random(6));
+
+        // Ensure uniqueness
+        while (User::where('referral_code', $code)->exists()) {
+            $code = strtoupper(Str::random(6));
+        }
 
         $user->update(['referral_code' => $code]);
 
@@ -35,105 +34,138 @@ class ReferralService
     }
 
     /**
-     * Register a referral (when someone signs up with referral code)
+     * Process referral when new user signs up with code
      */
-    public function registerReferral(User $referee, string $referralCode): Referral
+    public function processReferral(User $newUser, string $referralCode): ?Referral
     {
-        // Find referrer
         $referrer = User::where('referral_code', $referralCode)->first();
 
         if (!$referrer) {
-            throw new \Exception('Invalid referral code');
+            return null;
         }
 
-        if ($referrer->id === $referee->id) {
-            throw new \Exception('You cannot refer yourself');
-        }
+        // Create referral record
+        $referral = Referral::create([
+            'referrer_id' => $referrer->id,
+            'referee_id' => $newUser->id,
+            'referral_code' => $referralCode,
+            'status' => 'pending',
+            'tier' => 1,
+        ]);
 
-        if ($referee->referred_by_id) {
-            throw new \Exception('This user was already referred');
-        }
+        // Update user's referred_by
+        $newUser->update(['referred_by_id' => $referrer->id]);
 
-        return DB::transaction(function () use ($referrer, $referee) {
-            // Create referral record
-            $referral = Referral::create([
-                'referrer_id' => $referrer->id,
-                'referee_id' => $referee->id,
-                'status' => 'pending',
-                'referrer_reward_points' => self::REFERRER_POINTS,
-                'referee_reward_points' => self::REFEREE_POINTS,
-                'referrer_reward_amount' => self::REFERRER_AMOUNT,
-                'referee_reward_amount' => self::REFEREE_AMOUNT,
-            ]);
+        // Send notification to referrer
+        $this->notificationService->send(
+            $referrer,
+            '🎉 Nouveau filleul !',
+            "{$newUser->first_name} vient de s'inscrire avec votre code !",
+            'referral',
+            ['referee_id' => $newUser->id]
+        );
 
-            // Update referee
-            $referee->update(['referred_by_id' => $referrer->id]);
-
-            // Award welcome bonus to referee immediately
-            if (app()->has(LoyaltyService::class)) {
-                app(LoyaltyService::class)->awardBonusPoints(
-                    $referee,
-                    self::REFEREE_POINTS,
-                    'Referral welcome bonus'
-                );
-            }
-
-            return $referral;
-        });
+        return $referral;
     }
 
     /**
-     * Complete a referral (when referee makes qualifying purchase)
+     * Activate referral and award rewards (when referee makes first purchase)
      */
-    public function completeReferral(User $referee, float $purchaseAmount): ?Referral
+    public function activateReferral(Referral $referral): void
     {
-        if (!$referee->referred_by_id) {
-            return null;
+        if ($referral->status !== 'pending') {
+            return;
         }
 
-        // Find pending referral
-        $referral = Referral::where('referee_id', $referee->id)
-            ->pending()
-            ->first();
+        $referral->update([
+            'status' => 'active',
+            'activated_at' => now(),
+        ]);
 
-        if (!$referral) {
-            return null;
+        // Multi-tier rewards
+        $this->awardReferralRewards($referral);
+
+        // Increment successful referrals count
+        $referral->referrer->increment('successful_referrals');
+
+        // Check tier upgrade
+        $this->checkTierUpgrade($referral->referrer);
+    }
+
+    /**
+     * Award multi-tier referral rewards
+     */
+    private function awardReferralRewards(Referral $referral): void
+    {
+        $tiers = [
+            1 => ['referrer_points' => 500, 'referee_points' => 200],
+            2 => ['referrer_points' => 750, 'referee_points' => 300],
+            3 => ['referrer_points' => 1000, 'referee_points' => 400],
+        ];
+
+        $tier = min($referral->referrer->successful_referrals + 1, 3);
+        $rewards = $tiers[$tier];
+
+        // Reward referrer
+        $referral->referrer->increment('points_balance', $rewards['referrer_points']);
+        $referral->referrer->increment('coins_balance', $rewards['referrer_points'] / 10);
+
+        $this->notificationService->send(
+            $referral->referrer,
+            '💰 Récompense de parrainage !',
+            "Vous avez gagné {$rewards['referrer_points']} points pour le parrainage de {$referral->referee->first_name} !",
+            'referral_reward',
+            ['points' => $rewards['referrer_points']],
+            'high'
+        );
+
+        // Reward referee
+        $referral->referee->increment('points_balance', $rewards['referee_points']);
+        $referral->referee->increment('coins_balance', $rewards['referee_points'] / 10);
+
+        $this->notificationService->send(
+            $referral->referee,
+            '🎁 Bonus de bienvenue !',
+            "Vous avez gagné {$rewards['referee_points']} points grâce au parrainage de {$referral->referrer->first_name} !",
+            'referral_bonus',
+            ['points' => $rewards['referee_points']]
+        );
+
+        // Update referral tier and rewards
+        $referral->update([
+            'tier' => $tier,
+            'referrer_reward' => $rewards['referrer_points'],
+            'referee_reward' => $rewards['referee_points'],
+        ]);
+    }
+
+    /**
+     * Check and upgrade referral tier
+     */
+    private function checkTierUpgrade(User $user): void
+    {
+        $successfulReferrals = $user->successful_referrals;
+
+        $newTier = match(true) {
+            $successfulReferrals >= 50 => 'diamond',
+            $successfulReferrals >= 20 => 'gold',
+            $successfulReferrals >= 10 => 'silver',
+            $successfulReferrals >= 5 => 'bronze',
+            default => null,
+        };
+
+        if ($newTier && $user->referral_tier !== $newTier) {
+            $user->update(['referral_tier' => $newTier]);
+
+            $this->notificationService->send(
+                $user,
+                "🏆 Niveau de parrainage {$newTier} !",
+                "Félicitations ! Vous êtes maintenant un parrain {$newTier}. Continuez comme ça !",
+                'tier_upgrade',
+                ['tier' => $newTier],
+                'high'
+            );
         }
-
-        // Check if purchase meets minimum
-        if ($purchaseAmount < self::MIN_PURCHASE_AMOUNT) {
-            return null;
-        }
-
-        return DB::transaction(function () use ($referral, $referee) {
-            $referral->markAsCompleted();
-
-            // Award points/rewards to both users
-            if (app()->has(LoyaltyService::class)) {
-                $loyaltyService = app(LoyaltyService::class);
-
-                // Reward referrer
-                $loyaltyService->awardBonusPoints(
-                    $referral->referrer,
-                    $referral->referrer_reward_points,
-                    'Referral reward: ' . $referee->name
-                );
-
-                // Additional reward for referee
-                $loyaltyService->awardBonusPoints(
-                    $referee,
-                    50,
-                    'Completed first qualifying purchase'
-                );
-            }
-
-            // Update referrer's successful referrals count
-            $referral->referrer->increment('successful_referrals');
-
-            $referral->markAsRewarded();
-
-            return $referral;
-        });
     }
 
     /**
@@ -145,49 +177,49 @@ class ReferralService
 
         return [
             'total_referrals' => $referrals->count(),
+            'active_referrals' => $referrals->where('status', 'active')->count(),
             'pending_referrals' => $referrals->where('status', 'pending')->count(),
-            'completed_referrals' => $referrals->where('status', 'completed')->count(),
-            'rewarded_referrals' => $referrals->where('status', 'rewarded')->count(),
-            'total_points_earned' => $referrals->where('status', 'rewarded')->sum('referrer_reward_points'),
-            'total_amount_earned' => $referrals->where('status', 'rewarded')->sum('referrer_reward_amount'),
-            'referral_code' => $user->referral_code ?? $this->generateReferralCode($user),
-            'referral_link' => config('app.url') . '/register?ref=' . ($user->referral_code ?? ''),
+            'total_points_earned' => $referrals->sum('referrer_reward'),
+            'referral_tier' => $user->referral_tier ?? 'none',
+            'next_tier_in' => $this->getReferralsToNextTier($user),
+            'referral_code' => $user->referral_code,
         ];
     }
 
     /**
-     * Get leaderboard of top referrers
+     * Get number of referrals needed for next tier
      */
-    public function getLeaderboard(int $limit = 10): array
+    private function getReferralsToNextTier(User $user): ?int
+    {
+        $current = $user->successful_referrals;
+
+        $nextMilestone = match(true) {
+            $current < 5 => 5,
+            $current < 10 => 10,
+            $current < 20 => 20,
+            $current < 50 => 50,
+            default => null,
+        };
+
+        return $nextMilestone ? $nextMilestone - $current : null;
+    }
+
+    /**
+     * Get referral leaderboard
+     */
+    public function getReferralLeaderboard(int $limit = 50): \Illuminate\Support\Collection
     {
         return User::where('successful_referrals', '>', 0)
             ->orderByDesc('successful_referrals')
             ->limit($limit)
-            ->get()
-            ->map(function ($user) {
+            ->get(['id', 'first_name', 'last_name', 'avatar_url', 'successful_referrals', 'referral_tier'])
+            ->map(function ($user, $index) {
                 return [
-                    'id' => $user->id,
-                    'name' => $user->name,
-                    'successful_referrals' => $user->successful_referrals,
-                    'loyalty_tier' => $user->loyalty_tier,
+                    'rank' => $index + 1,
+                    'user' => $user,
+                    'referrals' => $user->successful_referrals,
+                    'tier' => $user->referral_tier,
                 ];
-            })
-            ->toArray();
-    }
-
-    /**
-     * Validate referral code
-     */
-    public function validateReferralCode(string $code): bool
-    {
-        return User::where('referral_code', $code)->exists();
-    }
-
-    /**
-     * Get referral by code
-     */
-    public function getReferralByCode(string $code): ?User
-    {
-        return User::where('referral_code', $code)->first();
+            });
     }
 }

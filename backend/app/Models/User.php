@@ -421,6 +421,55 @@ class User extends Model
     }
 
     /**
+     * Get the user's stories
+     */
+    public function stories(): HasMany
+    {
+        return $this->hasMany(Story::class);
+    }
+
+    /**
+     * Get the user's story views
+     */
+    public function storyViews(): HasMany
+    {
+        return $this->hasMany(StoryView::class);
+    }
+
+    /**
+     * Get the user's cashbacks
+     */
+    public function cashbacks(): HasMany
+    {
+        return $this->hasMany(Cashback::class);
+    }
+
+    /**
+     * Get purchased gift cards
+     */
+    public function purchasedGiftCards(): HasMany
+    {
+        return $this->hasMany(GiftCard::class, 'buyer_id');
+    }
+
+    /**
+     * Get redeemed gift cards
+     */
+    public function redeemedGiftCards(): HasMany
+    {
+        return $this->hasMany(GiftCard::class, 'redeemed_by_id');
+    }
+
+    /**
+     * Get followed merchants
+     */
+    public function followedMerchants(): BelongsToMany
+    {
+        return $this->belongsToMany(Merchant::class, 'merchant_followers')
+            ->withTimestamps();
+    }
+
+    /**
      * Scope to get verified users
      */
     public function scopeVerified($query)

@@ -259,6 +259,47 @@ class Merchant extends Model
     }
 
     /**
+     * Get the merchant's mayorships
+     */
+    public function mayorships(): HasMany
+    {
+        return $this->hasMany(Mayorship::class);
+    }
+
+    /**
+     * Get the merchant's stories
+     */
+    public function stories(): HasMany
+    {
+        return $this->hasMany(Story::class);
+    }
+
+    /**
+     * Get the merchant's followers
+     */
+    public function followers(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'merchant_followers')
+            ->withTimestamps();
+    }
+
+    /**
+     * Get the merchant's cashbacks
+     */
+    public function cashbacks(): HasMany
+    {
+        return $this->hasMany(Cashback::class);
+    }
+
+    /**
+     * Get the merchant's user favorites
+     */
+    public function userFavorites(): HasMany
+    {
+        return $this->hasMany(UserFavorite::class);
+    }
+
+    /**
      * Check if merchant can send more alerts this month
      */
     public function canSendAlert(): bool
