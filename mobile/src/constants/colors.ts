@@ -30,8 +30,11 @@ export const Colors = {
   
   // Semantic
   success: '#10B981',
+  successLight: '#D1FAE5',
   warning: '#F59E0B',
+  warningLight: '#FEF3C7',
   error: '#EF4444',
+  errorLight: '#FEE2E2',
   info: '#3B82F6',
   
   // Background
@@ -39,9 +42,14 @@ export const Colors = {
   surface: '#FFFFFF',
   
   // Text
+  text: '#111827',
   textPrimary: '#111827',
   textSecondary: '#6B7280',
+  textLight: '#6B7280',
   textDisabled: '#9CA3AF',
+
+  // Borders
+  border: '#E5E7EB',
   
   // Gamification
   bronze: '#CD7F32',
