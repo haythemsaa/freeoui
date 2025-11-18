@@ -1,0 +1,43 @@
+{
+  "name": "FreeOui",
+  "displayName": "FreeOui",
+  "expo": {
+    "name": "FreeOui",
+    "slug": "freeoui",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./src/assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./src/assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#4F46E5"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.freeoui.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "FreeOui needs access to your camera for QR codes and Stories",
+        "NSLocationWhenInUseUsageDescription": "FreeOui needs your location to show nearby advantages",
+        "NSPhotoLibraryUsageDescription": "FreeOui needs access to save photos"
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./src/assets/adaptive-icon.png",
+        "backgroundColor": "#4F46E5"
+      },
+      "package": "com.freeoui.app",
+      "permissions": [
+        "CAMERA",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ]
+    }
+  }
+}
